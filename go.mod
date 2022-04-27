@@ -3,6 +3,7 @@ module github.com/cloudwego/kitex
 go 1.13
 
 require (
+	bou.ke/monkey v1.0.2 // indirect
 	github.com/apache/thrift v0.13.0
 	github.com/bytedance/gopkg v0.0.0-20220413063733-65bf48ffb3a7
 	github.com/choleraehyq/pid v0.0.13

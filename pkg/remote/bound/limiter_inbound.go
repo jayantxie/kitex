@@ -68,3 +68,47 @@ func (l *serverLimiterHandler) OnInactive(ctx context.Context, conn net.Conn) co
 func (l *serverLimiterHandler) OnMessage(ctx context.Context, args, result remote.Message) (context.Context, error) {
 	return ctx, nil
 }
+
+// NewServerMuxLimiterHandler creates a new limiter handler for mux server.
+func NewServerMuxLimiterHandler(conLimit limiter.ConcurrencyLimiter, qpsLimit limiter.RateLimiter, reporter limiter.LimitReporter) remote.InboundHandler {
+	return &serverMuxLimiterHandler{conLimit, qpsLimit, reporter}
+}
+
+type serverMuxLimiterHandler struct {
+	conLimit limiter.ConcurrencyLimiter
+	qpsLimit limiter.RateLimiter
+	reporter limiter.LimitReporter
+}
+
+// OnActive implements the remote.InboundHandler interface.
+func (l *serverMuxLimiterHandler) OnActive(ctx context.Context, conn net.Conn) (context.Context, error) {
+	if l.conLimit.Acquire() {
+		return ctx, nil
+	}
+	if l.reporter != nil {
+		l.reporter.ConnOverloadReport()
+	}
+	return ctx, kerrors.ErrConnOverLimit
+}
+
+// OnRead implements the remote.InboundHandler interface.
+func (l *serverMuxLimiterHandler) OnRead(ctx context.Context, conn net.Conn) (context.Context, error) {
+	return ctx, nil
+}
+
+// OnInactive implements the remote.InboundHandler interface.
+func (l *serverMuxLimiterHandler) OnInactive(ctx context.Context, conn net.Conn) context.Context {
+	l.conLimit.Release()
+	return ctx
+}
+
+// OnMessage implements the remote.InboundHandler interface.
+func (l *serverMuxLimiterHandler) OnMessage(ctx context.Context, args, result remote.Message) (context.Context, error) {
+	if l.qpsLimit.Acquire() {
+		return ctx, nil
+	}
+	if l.reporter != nil {
+		l.reporter.QPSOverloadReport()
+	}
+	return ctx, kerrors.ErrQPSOverLimit
+}

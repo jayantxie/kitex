@@ -75,9 +75,8 @@ type Options struct {
 	// RegistryInfo is used to in registry.
 	RegistryInfo *registry.Info
 
-	ACLRules      []acl.RejectFunc
-	Limits        *limit.Option
-	LimitReporter limiter.LimitReporter
+	ACLRules []acl.RejectFunc
+	Limit    Limit
 
 	MWBs []endpoint.MiddlewareBuilder
 
@@ -91,6 +90,17 @@ type Options struct {
 	// Observability
 	TracerCtl  *internal_stats.Controller
 	StatsLevel *stats.Level
+}
+
+type Limit struct {
+	Limits        *limit.Option
+	LimitReporter limiter.LimitReporter
+	ConLimit      limiter.ConcurrencyLimiter
+	QPSLimit      limiter.RateLimiter
+
+	// LimitOnMessage for true indicates that the qps limiter takes effect at OnMessage callback, while for false at OnRead callback.
+	// Usually Kitex sets it automatically when server is launched with mux handler.
+	LimitOnMessage bool
 }
 
 // NewOptions creates a default options.

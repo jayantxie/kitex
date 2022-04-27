@@ -287,33 +287,43 @@ func (s *server) addBoundHandlers(opt *remote.ServerOption) {
 	}
 
 	// for server limiter, the handler should be added as first one
-	connLimit, qpsLimit, ok := s.buildLimiterWithOpt()
-	if ok {
-		limitHdlr := bound.NewServerLimiterHandler(connLimit, qpsLimit, s.opt.LimitReporter)
+	limitHdlr := s.buildLimiterWithOpt()
+	if limitHdlr != nil {
 		doAddBoundHandlerToHead(limitHdlr, opt)
 	}
 }
 
-func (s *server) buildLimiterWithOpt() (connLimit limiter.ConcurrencyLimiter, qpsLimit limiter.RateLimiter, ok bool) {
-	if s.opt.Limits != nil {
-		if s.opt.Limits.MaxConnections > 0 {
-			connLimit = limiter.NewConcurrencyLimiter(s.opt.Limits.MaxConnections)
+func (s *server) buildLimiterWithOpt() (handler remote.InboundHandler) {
+	connLimit := s.opt.Limit.ConLimit
+	qpsLimit := s.opt.Limit.QPSLimit
+	if connLimit == nil && qpsLimit == nil && s.opt.Limit.Limits == nil {
+		return
+	}
+	if connLimit == nil {
+		if s.opt.Limit.Limits != nil && s.opt.Limit.Limits.MaxConnections > 0 {
+			connLimit = limiter.NewConcurrencyLimiter(s.opt.Limit.Limits.MaxConnections)
 		} else {
 			connLimit = &limiter.DummyConcurrencyLimiter{}
 		}
-		if s.opt.Limits.MaxQPS > 0 {
+	}
+	if qpsLimit == nil {
+		if s.opt.Limit.Limits != nil && s.opt.Limit.Limits.MaxQPS > 0 {
 			interval := time.Millisecond * 100 // FIXME: should not care this implementation-specific parameter
-			qpsLimit = limiter.NewQPSLimiter(interval, s.opt.Limits.MaxQPS)
+			qpsLimit = limiter.NewQPSLimiter(interval, s.opt.Limit.Limits.MaxQPS)
 		} else {
 			qpsLimit = &limiter.DummyRateLimiter{}
 		}
-
-		if s.opt.Limits.UpdateControl != nil {
-			updater := limiter.NewLimiterWrapper(connLimit, qpsLimit)
-			s.opt.Limits.UpdateControl(updater)
-		}
-		ok = true
 	}
+	if s.opt.Limit.Limits != nil && s.opt.Limit.Limits.UpdateControl != nil {
+		updater := limiter.NewLimiterWrapper(connLimit, qpsLimit)
+		s.opt.Limit.Limits.UpdateControl(updater)
+	}
+	if s.opt.Limit.LimitOnMessage {
+		handler = bound.NewServerMuxLimiterHandler(connLimit, qpsLimit, s.opt.Limit.LimitReporter)
+	} else {
+		handler = bound.NewServerLimiterHandler(connLimit, qpsLimit, s.opt.Limit.LimitReporter)
+	}
+	// TODO: gRPC limiter
 	return
 }
 
