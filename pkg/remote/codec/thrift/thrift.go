@@ -83,12 +83,12 @@ func (c thriftCodec) Marshal(ctx context.Context, message remote.Message, out re
 	// 2. encode thrift
 	// encode with hyper codec
 	// NOTE: to ensure hyperMarshalEnabled is inlined so split the check logic, or it may cause performance loss
-	if c.hyperMarshalEnabled() && hyperMarshalAvailable(data) {
-		if err := c.hyperMarshal(data, message, out); err != nil {
-			return err
-		}
-		return nil
-	}
+	//if c.hyperMarshalEnabled() && hyperMarshalAvailable(data) {
+	//	if err := c.hyperMarshal(data, message, out); err != nil {
+	//		return err
+	//	}
+	//	return nil
+	//}
 
 	msgType := message.MessageType()
 	seqID := message.RPCInfo().Invocation().SeqID()
@@ -172,26 +172,26 @@ func (c thriftCodec) Unmarshal(ctx context.Context, message remote.Message, in r
 	data := message.Data()
 
 	// decode with hyper unmarshal
-	if c.hyperMarshalEnabled() && hyperMessageUnmarshalAvailable(data, message) {
-		msgBeginLen := bthrift.Binary.MessageBeginLength(methodName, msgType, seqID)
-		ri := message.RPCInfo()
-		internal_stats.Record(ctx, ri, stats.WaitReadStart, nil)
-		buf, err := tProt.next(message.PayloadLen() - msgBeginLen - bthrift.Binary.MessageEndLength())
-		internal_stats.Record(ctx, ri, stats.WaitReadFinish, err)
-		if err != nil {
-			return remote.NewTransError(remote.ProtocolError, err)
-		}
-		err = c.hyperMessageUnmarshal(buf, data)
-		if err != nil {
-			return err
-		}
-		err = tProt.ReadMessageEnd()
-		if err != nil {
-			return remote.NewTransError(remote.ProtocolError, err)
-		}
-		tProt.Recycle()
-		return nil
-	}
+	//if c.hyperMarshalEnabled() && hyperMessageUnmarshalAvailable(data, message) {
+	//	msgBeginLen := bthrift.Binary.MessageBeginLength(methodName, msgType, seqID)
+	//	ri := message.RPCInfo()
+	//	internal_stats.Record(ctx, ri, stats.WaitReadStart, nil)
+	//	buf, err := tProt.next(message.PayloadLen() - msgBeginLen - bthrift.Binary.MessageEndLength())
+	//	internal_stats.Record(ctx, ri, stats.WaitReadFinish, err)
+	//	if err != nil {
+	//		return remote.NewTransError(remote.ProtocolError, err)
+	//	}
+	//	err = c.hyperMessageUnmarshal(buf, data)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	err = tProt.ReadMessageEnd()
+	//	if err != nil {
+	//		return remote.NewTransError(remote.ProtocolError, err)
+	//	}
+	//	tProt.Recycle()
+	//	return nil
+	//}
 
 	// decode with FastRead
 	if c.CodecType&FastRead != 0 {
