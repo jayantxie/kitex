@@ -34,13 +34,11 @@ const (
 	FrugalRead
 )
 
-// hyperMarshalEnabled indicates that if there are high priority message codec for current platform.
-func (c thriftCodec) hyperMarshalEnabled() bool {
-	return c.CodecType&FrugalWrite != 0
-}
-
-// hyperMarshalAvailable indicates that if high priority message codec is available.
-func hyperMarshalAvailable(data interface{}) bool {
+// hasHyperMarshal indicates that if there are high priority message codec for current platform.
+func (c thriftCodec) hasHyperMarshal(data interface{}) bool {
+	if c.CodecType&FrugalWrite == 0 {
+		return false
+	}
 	dt := reflect.TypeOf(data).Elem()
 	if dt.NumField() > 0 && dt.Field(0).Tag.Get("frugal") == "" {
 		return false
@@ -48,13 +46,11 @@ func hyperMarshalAvailable(data interface{}) bool {
 	return true
 }
 
-// hyperMessageUnmarshalEnabled indicates that if there are high priority message codec for current platform.
-func (c thriftCodec) hyperMessageUnmarshalEnabled() bool {
-	return c.CodecType&FrugalRead != 0
-}
-
-// hyperMessageUnmarshalAvailable indicates that if high priority message codec is available.
-func hyperMessageUnmarshalAvailable(data interface{}, message remote.Message) bool {
+// hasHyperUnmarshal indicates that if there are high priority message codec for current platform.
+func (c thriftCodec) hasHyperMessageUnmarshal(data interface{}, message remote.Message) bool {
+	if c.CodecType&FrugalRead == 0 {
+		return false
+	}
 	if message.PayloadLen() == 0 {
 		return false
 	}
