@@ -25,7 +25,6 @@ import (
 
 	mocksklog "github.com/cloudwego/kitex/internal/mocks/klog"
 	"github.com/cloudwego/kitex/pkg/remote/trans/netpoll"
-	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2"
 
 	"github.com/golang/mock/gomock"
 
@@ -40,7 +39,7 @@ import (
 )
 
 func TestServerHandlerCall(t *testing.T) {
-	transHdler, _ := NewSvrTransHandlerFactory(netpoll.NewSvrTransHandlerFactory(), nphttp2.NewSvrTransHandlerFactory()).NewTransHandler(&remote.ServerOption{
+	transHdler, _ := NewSvrTransHandlerFactory(netpoll.NewSvrTransHandlerFactory()).NewTransHandler(&remote.ServerOption{
 		SvcInfo: mocks.ServiceInfo(),
 	})
 
@@ -109,7 +108,7 @@ func TestOnError(t *testing.T) {
 		klog.SetLogger(klog.DefaultLogger())
 		ctrl.Finish()
 	}()
-	transHdler, err := NewSvrTransHandlerFactory(netpoll.NewSvrTransHandlerFactory(), nphttp2.NewSvrTransHandlerFactory()).NewTransHandler(&remote.ServerOption{
+	transHdler, err := NewSvrTransHandlerFactory(netpoll.NewSvrTransHandlerFactory()).NewTransHandler(&remote.ServerOption{
 		SvcInfo: mocks.ServiceInfo(),
 	})
 	test.Assert(t, err == nil)
@@ -138,7 +137,7 @@ func TestOnError(t *testing.T) {
 
 // TestOnInactive covers onInactive() codes to check panic
 func TestOnInactive(t *testing.T) {
-	transHdler, err := NewSvrTransHandlerFactory(netpoll.NewSvrTransHandlerFactory(), nphttp2.NewSvrTransHandlerFactory()).NewTransHandler(&remote.ServerOption{
+	transHdler, err := NewSvrTransHandlerFactory(netpoll.NewSvrTransHandlerFactory()).NewTransHandler(&remote.ServerOption{
 		SvcInfo: mocks.ServiceInfo(),
 	})
 	test.Assert(t, err == nil)
