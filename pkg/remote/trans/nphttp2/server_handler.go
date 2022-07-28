@@ -121,6 +121,7 @@ func (t *svrTransHandler) OnRead(ctx context.Context, conn net.Conn) error {
 					}
 				}
 				t.finishTracer(rCtx, ri, err, panicErr)
+				t.opt.RecycleRPCInfoFunc(ri)
 			}()
 
 			ink := ri.Invocation().(rpcinfo.InvocationSetter)

@@ -66,6 +66,8 @@ type server struct {
 	svr     remotesvr.Server
 	stopped sync.Once
 
+	rpcInfoPool sync.Pool
+
 	sync.Mutex
 }
 
@@ -92,6 +94,9 @@ func (s *server) init() {
 		ds.RegisterProbeFunc(diagnosis.ChangeEventsKey, s.opt.Events.Dump)
 	}
 	s.buildInvokeChain()
+	s.rpcInfoPool = sync.Pool{
+		New: s.newRPCInfo,
+	}
 }
 
 func fillContext(opt *internal_server.Options) context.Context {
@@ -121,24 +126,47 @@ func newErrorHandleMW(errHandle func(error) error) endpoint.Middleware {
 	}
 }
 
+func (s *server) newRPCInfo() interface{} {
+	rpcStats := rpcinfo.AsMutableRPCStats(rpcinfo.NewRPCStats())
+	if s.opt.StatsLevel != nil {
+		rpcStats.SetLevel(*s.opt.StatsLevel)
+	}
+
+	// Export read-only views to external users and keep a mapping for internal users.
+	ri := rpcinfo.NewRPCInfo(
+		rpcinfo.EmptyEndpointInfo(),
+		rpcinfo.FromBasicInfo(s.opt.Svr),
+		rpcinfo.NewServerInvocation(),
+		rpcinfo.AsMutableRPCConfig(s.opt.Configs).Clone().ImmutableView(),
+		rpcStats.ImmutableView(),
+	)
+	return ri
+}
+
+func (s *server) recycleRPCInfoFunc() func(ri rpcinfo.RPCInfo) {
+	return func(ri rpcinfo.RPCInfo) {
+		fi := rpcinfo.AsMutableEndpointInfo(ri.From())
+		fi.Reset()
+		rpcinfo.AsMutableEndpointInfo(ri.To()).ResetFromBasicInfo(s.opt.Svr)
+		if setter, ok := ri.Invocation().(rpcinfo.InvocationSetter); ok {
+			setter.Reset()
+		}
+		rpcinfo.AsMutableRPCConfig(s.opt.Configs).CloneTo(rpcinfo.AsMutableRPCConfig(ri.Config()))
+		rpcStats := rpcinfo.AsMutableRPCStats(ri.Stats())
+		rpcStats.Reset()
+		if s.opt.StatsLevel != nil {
+			rpcStats.SetLevel(*s.opt.StatsLevel)
+		}
+		s.rpcInfoPool.Put(ri)
+	}
+}
+
 func (s *server) initRPCInfoFunc() func(context.Context, net.Addr) (rpcinfo.RPCInfo, context.Context) {
 	return func(ctx context.Context, rAddr net.Addr) (rpcinfo.RPCInfo, context.Context) {
 		if ctx == nil {
 			ctx = context.Background()
 		}
-		rpcStats := rpcinfo.AsMutableRPCStats(rpcinfo.NewRPCStats())
-		if s.opt.StatsLevel != nil {
-			rpcStats.SetLevel(*s.opt.StatsLevel)
-		}
-
-		// Export read-only views to external users and keep a mapping for internal users.
-		ri := rpcinfo.NewRPCInfo(
-			rpcinfo.EmptyEndpointInfo(),
-			rpcinfo.FromBasicInfo(s.opt.Svr),
-			rpcinfo.NewServerInvocation(),
-			rpcinfo.AsMutableRPCConfig(s.opt.Configs).Clone().ImmutableView(),
-			rpcStats.ImmutableView(),
-		)
+		ri := s.rpcInfoPool.Get().(rpcinfo.RPCInfo)
 		rpcinfo.AsMutableEndpointInfo(ri.From()).SetAddress(rAddr)
 		ctx = rpcinfo.NewCtxWithRPCInfo(ctx, ri)
 		return ri, ctx
@@ -276,6 +304,7 @@ func (s *server) initBasicRemoteOption() {
 	remoteOpt := s.opt.RemoteOpt
 	remoteOpt.SvcInfo = s.svcInfo
 	remoteOpt.InitRPCInfoFunc = s.initRPCInfoFunc()
+	remoteOpt.RecycleRPCInfoFunc = s.recycleRPCInfoFunc()
 	remoteOpt.TracerCtl = s.opt.TracerCtl
 	remoteOpt.ReadWriteTimeout = s.opt.Configs.ReadWriteTimeout()
 }

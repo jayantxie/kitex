@@ -48,12 +48,13 @@ func NewDefaultSvrTransHandler(opt *remote.ServerOption, ext Extension) (remote.
 }
 
 type svrTransHandler struct {
-	opt        *remote.ServerOption
-	svcInfo    *serviceinfo.ServiceInfo
-	inkHdlFunc endpoint.Endpoint
-	codec      remote.Codec
-	transPipe  *remote.TransPipeline
-	ext        Extension
+	hasRequested bool
+	opt          *remote.ServerOption
+	svcInfo      *serviceinfo.ServiceInfo
+	inkHdlFunc   endpoint.Endpoint
+	codec        remote.Codec
+	transPipe    *remote.TransPipeline
+	ext          Extension
 }
 
 // Write implements the remote.ServerTransHandler interface.
@@ -100,7 +101,9 @@ func (t *svrTransHandler) Read(ctx context.Context, conn net.Conn, recvMsg remot
 
 // OnRead implements the remote.ServerTransHandler interface.
 func (t *svrTransHandler) OnRead(ctx context.Context, conn net.Conn) error {
-	ri := rpcinfo.GetRPCInfo(ctx)
+	// init rpcinfo
+	ri, ctx := t.opt.InitRPCInfoFunc(ctx, conn.RemoteAddr())
+
 	t.ext.SetReadTimeout(ctx, conn, ri.Config(), remote.Server)
 	var err error
 	var closeConn bool
@@ -124,6 +127,7 @@ func (t *svrTransHandler) OnRead(ctx context.Context, conn net.Conn) error {
 		t.finishTracer(ctx, ri, err, panicErr)
 		remote.RecycleMessage(recvMsg)
 		remote.RecycleMessage(sendMsg)
+		t.opt.RecycleRPCInfoFunc(ri)
 	}()
 	ctx = t.startTracer(ctx, ri)
 	recvMsg = remote.NewMessageWithNewer(t.svcInfo, ri, remote.Call, remote.Server)
@@ -178,15 +182,11 @@ func (t *svrTransHandler) OnMessage(ctx context.Context, args, result remote.Mes
 
 // OnActive implements the remote.ServerTransHandler interface.
 func (t *svrTransHandler) OnActive(ctx context.Context, conn net.Conn) (context.Context, error) {
-	// init rpcinfo
-	_, ctx = t.opt.InitRPCInfoFunc(ctx, conn.RemoteAddr())
 	return ctx, nil
 }
 
 // OnInactive implements the remote.ServerTransHandler interface.
 func (t *svrTransHandler) OnInactive(ctx context.Context, conn net.Conn) {
-	// recycle rpcinfo
-	rpcinfo.PutRPCInfo(rpcinfo.GetRPCInfo(ctx))
 }
 
 // OnError implements the remote.ServerTransHandler interface.

@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"sync"
 
 	"github.com/cloudwego/netpoll"
 	"github.com/cloudwego/netpoll/mux"
@@ -135,17 +134,15 @@ func (c *muxCliConn) onError(ctx context.Context, err error, connection netpoll.
 	return err
 }
 
-func newMuxSvrConn(connection netpoll.Connection, pool *sync.Pool) *muxSvrConn {
+func newMuxSvrConn(connection netpoll.Connection) *muxSvrConn {
 	c := &muxSvrConn{
 		muxConn: newMuxConn(connection),
-		pool:    pool,
 	}
 	return c
 }
 
 type muxSvrConn struct {
 	muxConn
-	pool *sync.Pool // ctx with rpcInfo
 }
 
 func newMuxConn(connection netpoll.Connection) muxConn {

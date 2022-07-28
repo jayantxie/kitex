@@ -96,6 +96,8 @@ type ServerOption struct {
 
 	InitRPCInfoFunc func(context.Context, net.Addr) (rpcinfo.RPCInfo, context.Context)
 
+	RecycleRPCInfoFunc func(rpcinfo.RPCInfo)
+
 	TracerCtl *internal_stats.Controller
 
 	GRPCCfg *grpc.ServerConfig
