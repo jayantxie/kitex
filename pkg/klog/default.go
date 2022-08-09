@@ -50,7 +50,7 @@ func DefaultLogger() FullLogger {
 // Note that this method is not concurrent-safe and must not be called
 // after the use of DefaultLogger and global functions in this package.
 func SetLogger(v FullLogger) {
-	logger = v
+	// logger = v
 }
 
 // Fatal calls the default logger's Fatal method and then os.Exit(1).
