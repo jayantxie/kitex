@@ -22,6 +22,7 @@ import (
 
 	"github.com/cloudwego/kitex/client/callopt"
 	"github.com/cloudwego/kitex/internal/test"
+	"github.com/cloudwego/kitex/pkg/kcontext"
 )
 
 const (
@@ -53,6 +54,6 @@ func TestContextWithCallOptions(t *testing.T) {
 	test.DeepEqual(t, opts, callOpts)
 
 	// read call opts info
-	ctxWithCallOptsInfo := context.WithValue(ctx, ctxCallOptionInfoKey, mockCallOptsInfo)
+	ctxWithCallOptsInfo := kcontext.WithValue(ctx, kcontext.ContextKeyCallOptionInfo, mockCallOptsInfo)
 	test.Assert(t, CallOptionInfoFromCtx(ctxWithCallOptsInfo) == mockCallOptsInfo)
 }

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/kitex/pkg/circuitbreak"
+	"github.com/cloudwego/kitex/pkg/kcontext"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
@@ -121,7 +122,7 @@ func (r *failureRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rp
 			}
 			callStart = time.Now()
 			callCosts.WriteByte(',')
-			if respOp, ok := ctx.Value(CtxRespOp).(*int32); ok {
+			if respOp, ok := ctx.Value(kcontext.ContextKeyKRespOp).(*int32); ok {
 				atomic.StoreInt32(respOp, OpNo)
 			}
 		}

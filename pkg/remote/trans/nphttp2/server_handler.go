@@ -30,6 +30,7 @@ import (
 	internal_stats "github.com/cloudwego/kitex/internal/stats"
 	"github.com/cloudwego/kitex/pkg/endpoint"
 	"github.com/cloudwego/kitex/pkg/gofunc"
+	"github.com/cloudwego/kitex/pkg/kcontext"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/remote"
@@ -163,7 +164,7 @@ func (t *svrTransHandler) OnRead(ctx context.Context, conn net.Conn) error {
 			streamArg := &streaming.Args{Stream: st}
 
 			// bind stream into ctx, in order to let user set header and trailer by provided api in meta_api.go
-			rCtx = context.WithValue(rCtx, streamKey{}, st)
+			rCtx = kcontext.WithValue(rCtx, kcontext.ContextKeyGrpcStream, st)
 
 			// check grpc method
 			targetMethod := t.svcInfo.MethodInfo(methodName)

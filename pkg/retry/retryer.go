@@ -27,6 +27,7 @@ import (
 	"github.com/bytedance/gopkg/cloud/circuitbreaker"
 
 	"github.com/cloudwego/kitex/pkg/circuitbreak"
+	"github.com/cloudwego/kitex/pkg/kcontext"
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 )
@@ -209,8 +210,8 @@ func (rc *Container) WithRetryIfNeeded(ctx context.Context, callOptRetry Policy,
 	reqOp := OpNo
 	// respOp is used to ignore resp concurrent write and read, especially in backup request
 	respOp := OpNo
-	ctx = context.WithValue(ctx, CtxReqOp, &reqOp)
-	ctx = context.WithValue(ctx, CtxRespOp, &respOp)
+	ctx = kcontext.WithValue(ctx, kcontext.ContextKeyKReqOp, &reqOp)
+	ctx = kcontext.WithValue(ctx, kcontext.ContextKeyKRespOp, &respOp)
 
 	// do rpc call with retry policy
 	recycleRI, err = retryer.Do(ctx, rpcCall, ri, request)

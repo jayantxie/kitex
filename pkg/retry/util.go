@@ -25,6 +25,7 @@ import (
 
 	"github.com/bytedance/gopkg/cloud/metainfo"
 
+	"github.com/cloudwego/kitex/pkg/kcontext"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
@@ -54,6 +55,11 @@ const (
 	OpDoing
 	OpDone
 )
+
+func init() {
+	kcontext.BindContextKey(CtxReqOp, kcontext.ContextKeyKReqOp)
+	kcontext.BindContextKey(CtxRespOp, kcontext.ContextKeyKRespOp)
+}
 
 // DDLStopFunc is the definition of ddlStop func
 type DDLStopFunc func(ctx context.Context, policy StopPolicy) (bool, string)

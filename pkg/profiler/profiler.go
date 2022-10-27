@@ -29,10 +29,9 @@ import (
 
 	"github.com/google/pprof/profile"
 
+	"github.com/cloudwego/kitex/pkg/kcontext"
 	"github.com/cloudwego/kitex/pkg/klog"
 )
-
-type profilerContextKey struct{}
 
 type Profiler interface {
 	Run(ctx context.Context) (err error)
@@ -96,7 +95,7 @@ type profiler struct {
 // Tag current goroutine with tagged ctx
 // it's used for reuse goroutine scenario
 func Tag(ctx context.Context) {
-	if pc, ok := ctx.Value(profilerContextKey{}).(*profilerContext); ok {
+	if pc, ok := ctx.Value(kcontext.ContextKeyProfiler).(*profilerContext); ok {
 		pc.profiler.Tag(ctx)
 	}
 }
@@ -104,7 +103,7 @@ func Tag(ctx context.Context) {
 // Untag current goroutine with tagged ctx
 // it's used for reuse goroutine scenario
 func Untag(ctx context.Context) {
-	if pc, ok := ctx.Value(profilerContextKey{}).(*profilerContext); ok {
+	if pc, ok := ctx.Value(kcontext.ContextKeyProfiler).(*profilerContext); ok {
 		pc.profiler.Untag(ctx)
 	}
 }
@@ -124,10 +123,10 @@ func newProfilerContext(profiler Profiler) *profilerContext {
 
 // Prepare the profiler context
 func (p *profiler) Prepare(ctx context.Context) context.Context {
-	if c := ctx.Value(profilerContextKey{}); c != nil {
+	if c := ctx.Value(kcontext.ContextKeyProfiler); c != nil {
 		return ctx
 	}
-	return context.WithValue(ctx, profilerContextKey{}, newProfilerContext(p))
+	return kcontext.WithValue(ctx, kcontext.ContextKeyProfiler, newProfilerContext(p))
 }
 
 // Stop the profiler analyse loop
@@ -248,10 +247,10 @@ func (p *profiler) Run(ctx context.Context) (err error) {
 // Tag current goroutine with tags
 // If ctx already tagged, append the existed tags
 func (p *profiler) Tag(ctx context.Context, tags ...string) context.Context {
-	pctx, ok := ctx.Value(profilerContextKey{}).(*profilerContext)
+	pctx, ok := ctx.Value(kcontext.ContextKeyProfiler).(*profilerContext)
 	if !ok {
 		pctx = newProfilerContext(p)
-		ctx = context.WithValue(ctx, profilerContextKey{}, pctx)
+		ctx = kcontext.WithValue(ctx, kcontext.ContextKeyProfiler, pctx)
 	}
 	if pctx.untagCtx == nil {
 		pctx.untagCtx = ctx
@@ -265,7 +264,7 @@ func (p *profiler) Tag(ctx context.Context, tags ...string) context.Context {
 // Untag current goroutine
 // Only untag if ctx already tagged, will not clear the goroutine labels if not tagged by profiler
 func (p *profiler) Untag(ctx context.Context) {
-	if pc, ok := ctx.Value(profilerContextKey{}).(*profilerContext); ok && pc.untagCtx != nil {
+	if pc, ok := ctx.Value(kcontext.ContextKeyProfiler).(*profilerContext); ok && pc.untagCtx != nil {
 		// if ctx have untagCtx, that means the current goroutine created by a tagged goroutine
 		// we need to untag the goroutine when finished
 		// else, do nothing

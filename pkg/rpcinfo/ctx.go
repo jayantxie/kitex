@@ -20,16 +20,13 @@ import (
 	"context"
 
 	"github.com/cloudwego/kitex/internal"
+	"github.com/cloudwego/kitex/pkg/kcontext"
 )
-
-type ctxRPCInfoKeyType struct{}
-
-var ctxRPCInfoKey ctxRPCInfoKeyType
 
 // NewCtxWithRPCInfo creates a new context with the RPCInfo given.
 func NewCtxWithRPCInfo(ctx context.Context, ri RPCInfo) context.Context {
 	if ri != nil {
-		return context.WithValue(ctx, ctxRPCInfoKey, ri)
+		return kcontext.WithValue(ctx, kcontext.ContextKeyRPCInfo, ri)
 	}
 	return ctx
 }
@@ -37,7 +34,7 @@ func NewCtxWithRPCInfo(ctx context.Context, ri RPCInfo) context.Context {
 // GetRPCInfo gets RPCInfo from ctx.
 // Returns nil if not found.
 func GetRPCInfo(ctx context.Context) RPCInfo {
-	if ri, ok := ctx.Value(ctxRPCInfoKey).(RPCInfo); ok {
+	if ri, ok := ctx.Value(kcontext.ContextKeyRPCInfo).(RPCInfo); ok {
 		return ri
 	}
 	return nil

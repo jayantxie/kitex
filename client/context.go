@@ -20,13 +20,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/kitex/client/callopt"
-)
-
-type ctxKeyType int
-
-const (
-	ctxCallOptionKey ctxKeyType = iota
-	ctxCallOptionInfoKey
+	"github.com/cloudwego/kitex/pkg/kcontext"
 )
 
 // NewCtxWithCallOptions returns a new context associated with the given call-Options.
@@ -34,7 +28,7 @@ func NewCtxWithCallOptions(ctx context.Context, opts []callopt.Option) context.C
 	if ctx == nil || len(opts) == 0 {
 		return ctx
 	}
-	return context.WithValue(ctx, ctxCallOptionKey, opts)
+	return kcontext.WithValue(ctx, kcontext.ContextKeyCallOption, opts)
 }
 
 // CallOptionsFromCtx retrieves call-Options from the given context.
@@ -42,14 +36,14 @@ func CallOptionsFromCtx(ctx context.Context) (res []callopt.Option) {
 	if ctx == nil {
 		return
 	}
-	res, _ = ctx.Value(ctxCallOptionKey).([]callopt.Option)
+	res, _ = ctx.Value(kcontext.ContextKeyCallOption).([]callopt.Option)
 	return
 }
 
 // CallOptionInfoFromCtx retrieves the call Options debug information from the given context.
 func CallOptionInfoFromCtx(ctx context.Context) (res string) {
 	if ctx != nil {
-		res, _ = ctx.Value(ctxCallOptionInfoKey).(string)
+		res, _ = ctx.Value(kcontext.ContextKeyCallOptionInfo).(string)
 	}
 	return
 }

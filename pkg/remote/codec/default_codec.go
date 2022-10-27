@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/cloudwego/kitex/pkg/kcontext"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/remote"
 	"github.com/cloudwego/kitex/pkg/remote/codec/perrors"
@@ -281,7 +282,7 @@ func checkRPCState(ctx context.Context, message remote.Message) error {
 	if ctx.Err() == context.DeadlineExceeded || ctx.Err() == context.Canceled {
 		return kerrors.ErrRPCFinish
 	}
-	if respOp, ok := ctx.Value(retry.CtxRespOp).(*int32); ok {
+	if respOp, ok := ctx.Value(kcontext.ContextKeyKRespOp).(*int32); ok {
 		if !atomic.CompareAndSwapInt32(respOp, retry.OpNo, retry.OpDoing) {
 			// previous call is being handling or done
 			// this flag is used to check request status in retry(backup request) scene

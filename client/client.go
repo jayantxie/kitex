@@ -29,10 +29,10 @@ import (
 	"github.com/cloudwego/kitex/client/callopt"
 	"github.com/cloudwego/kitex/internal/client"
 	"github.com/cloudwego/kitex/pkg/acl"
-	"github.com/cloudwego/kitex/pkg/consts"
 	"github.com/cloudwego/kitex/pkg/diagnosis"
 	"github.com/cloudwego/kitex/pkg/discovery"
 	"github.com/cloudwego/kitex/pkg/endpoint"
+	"github.com/cloudwego/kitex/pkg/kcontext"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/loadbalance"
@@ -280,7 +280,7 @@ func (kc *kClient) initRPCInfo(ctx context.Context, method string) (context.Cont
 		rpcStats.ImmutableView(),
 	)
 
-	if fromMethod := ctx.Value(consts.CtxKeyMethod); fromMethod != nil {
+	if fromMethod := ctx.Value(kcontext.ContextKeyKMethod); fromMethod != nil {
 		rpcinfo.AsMutableEndpointInfo(ri.From()).SetMethod(fromMethod.(string))
 	}
 
@@ -300,7 +300,7 @@ func (kc *kClient) applyCallOptions(ctx context.Context, cfg rpcinfo.MutableRPCC
 	cos := CallOptionsFromCtx(ctx)
 	if len(cos) > 0 {
 		info, callOpts := callopt.Apply(cos, cfg, svr, kc.opt.Locks, kc.opt.HTTPResolver)
-		ctx = context.WithValue(ctx, ctxCallOptionInfoKey, info)
+		ctx = kcontext.WithValue(ctx, kcontext.ContextKeyCallOptionInfo, info)
 		return ctx, callOpts
 	}
 	kc.opt.Locks.ApplyLocks(cfg, svr)

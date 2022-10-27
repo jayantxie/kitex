@@ -23,14 +23,12 @@ import (
 	"net"
 	"testing"
 
-	mocksklog "github.com/cloudwego/kitex/internal/mocks/klog"
-
 	"github.com/golang/mock/gomock"
 
+	"github.com/cloudwego/kitex/internal/mocks"
+	mocksklog "github.com/cloudwego/kitex/internal/mocks/klog"
 	npmocks "github.com/cloudwego/kitex/internal/mocks/netpoll"
 	remote_mocks "github.com/cloudwego/kitex/internal/mocks/remote"
-
-	"github.com/cloudwego/kitex/internal/mocks"
 	"github.com/cloudwego/kitex/internal/test"
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/remote"

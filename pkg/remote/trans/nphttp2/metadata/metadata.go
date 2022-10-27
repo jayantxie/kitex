@@ -27,6 +27,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/cloudwego/kitex/pkg/kcontext"
 )
 
 // DecodeKeyValue returns k, v, nil.
@@ -137,21 +139,16 @@ func Join(mds ...MD) MD {
 	return out
 }
 
-type (
-	mdIncomingKey struct{}
-	mdOutgoingKey struct{}
-)
-
 // NewIncomingContext creates a new context with incoming md attached.
 func NewIncomingContext(ctx context.Context, md MD) context.Context {
-	return context.WithValue(ctx, mdIncomingKey{}, md)
+	return kcontext.WithValue(ctx, kcontext.ContextKeyH2MetadataIncoming, md)
 }
 
 // NewOutgoingContext creates a new context with outgoing md attached. If used
 // in conjunction with AppendToOutgoingContext, NewOutgoingContext will
 // overwrite any previously-appended metadata.
 func NewOutgoingContext(ctx context.Context, md MD) context.Context {
-	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md})
+	return kcontext.WithValue(ctx, kcontext.ContextKeyH2MetadataOutgoing, rawMD{md: md})
 }
 
 // AppendToOutgoingContext returns a new context with the provided kv merged
@@ -161,19 +158,19 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 	if len(kv)%2 == 1 {
 		panic(fmt.Sprintf("metadata: AppendToOutgoingContext got an odd number of input pairs for metadata: %d", len(kv)))
 	}
-	md, _ := ctx.Value(mdOutgoingKey{}).(rawMD)
+	md, _ := ctx.Value(kcontext.ContextKeyH2MetadataOutgoing).(rawMD)
 	added := make([][]string, len(md.added)+1)
 	copy(added, md.added)
 	added[len(added)-1] = make([]string, len(kv))
 	copy(added[len(added)-1], kv)
-	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: added})
+	return kcontext.WithValue(ctx, kcontext.ContextKeyH2MetadataOutgoing, rawMD{md: md.md, added: added})
 }
 
 // FromIncomingContext returns the incoming metadata in ctx if it exists.  The
 // returned MD should not be modified. Writing to it may cause races.
 // Modification should be made to copies of the returned MD.
 func FromIncomingContext(ctx context.Context) (md MD, ok bool) {
-	md, ok = ctx.Value(mdIncomingKey{}).(MD)
+	md, ok = ctx.Value(kcontext.ContextKeyH2MetadataIncoming).(MD)
 	return
 }
 
@@ -184,7 +181,7 @@ func FromIncomingContext(ctx context.Context) (md MD, ok bool) {
 //
 // This is intended for gRPC-internal use ONLY.
 func FromOutgoingContextRaw(ctx context.Context) (MD, [][]string, bool) {
-	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
+	raw, ok := ctx.Value(kcontext.ContextKeyH2MetadataOutgoing).(rawMD)
 	if !ok {
 		return nil, nil, false
 	}
@@ -196,7 +193,7 @@ func FromOutgoingContextRaw(ctx context.Context) (MD, [][]string, bool) {
 // returned MD should not be modified. Writing to it may cause races.
 // Modification should be made to copies of the returned MD.
 func FromOutgoingContext(ctx context.Context) (MD, bool) {
-	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
+	raw, ok := ctx.Value(kcontext.ContextKeyH2MetadataOutgoing).(rawMD)
 	if !ok {
 		return nil, false
 	}

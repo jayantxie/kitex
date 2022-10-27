@@ -20,7 +20,7 @@ import (
 	"context"
 	"net"
 
-	"github.com/cloudwego/kitex/pkg/consts"
+	"github.com/cloudwego/kitex/pkg/kcontext"
 	"github.com/cloudwego/kitex/pkg/remote"
 )
 
@@ -61,7 +61,7 @@ func (h *transMetaHandler) OnMessage(ctx context.Context, args, result remote.Me
 	}
 	if isServer && result.MessageType() != remote.Exception {
 		// Pass through method name using ctx, the method name will be used as from method in the client.
-		ctx = context.WithValue(ctx, consts.CtxKeyMethod, msg.RPCInfo().To().Method())
+		ctx = kcontext.WithValue(ctx, kcontext.ContextKeyKMethod, msg.RPCInfo().To().Method())
 	}
 	return ctx, nil
 }

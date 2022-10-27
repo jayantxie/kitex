@@ -20,6 +20,7 @@ import (
 	"context"
 	"net"
 
+	"github.com/cloudwego/kitex/pkg/kcontext"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/codes"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/metadata"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/status"
@@ -94,35 +95,28 @@ func SetTrailer(ctx context.Context, md metadata.MD) error {
 	return nil
 }
 
-type streamKey struct{}
-
 func serverTransportStreamFromContext(ctx context.Context) streaming.Stream {
-	s, _ := ctx.Value(streamKey{}).(streaming.Stream)
+	s, _ := ctx.Value(kcontext.ContextKeyGrpcStream).(streaming.Stream)
 	return s
 }
 
-type (
-	headerKey  struct{}
-	trailerKey struct{}
-)
-
 // GRPCHeader is used for unary call client to get header from response.
 func GRPCHeader(ctx context.Context, md *metadata.MD) context.Context {
-	return context.WithValue(ctx, headerKey{}, md)
+	return kcontext.WithValue(ctx, kcontext.ContextKeyGrpcHeader, md)
 }
 
 // GRPCTrailer is used for unary call client to get taiiler from response.
 func GRPCTrailer(ctx context.Context, md *metadata.MD) context.Context {
-	return context.WithValue(ctx, trailerKey{}, md)
+	return kcontext.WithValue(ctx, kcontext.ContextKeyGrpcTrailer, md)
 }
 
 func receiveHeaderAndTrailer(ctx context.Context, conn net.Conn) {
-	header := ctx.Value(headerKey{})
+	header := ctx.Value(kcontext.ContextKeyGrpcHeader)
 	if header != nil {
 		headerMd := header.(*metadata.MD)
 		*headerMd, _ = conn.(*clientConn).Header()
 	}
-	tailer := ctx.Value(trailerKey{})
+	tailer := ctx.Value(kcontext.ContextKeyGrpcTrailer)
 	if tailer != nil {
 		tailerMd := tailer.(*metadata.MD)
 		*tailerMd = conn.(*clientConn).Trailer()
