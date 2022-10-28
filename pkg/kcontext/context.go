@@ -16,7 +16,9 @@
 
 package kcontext
 
-import "context"
+import (
+	"context"
+)
 
 // valueCtx has a builtin slice, which stores values indexed by ContextKey.
 type valueCtx struct {
@@ -68,7 +70,7 @@ func Clone(parent context.Context) context.Context {
 	if ctx, ok := parent.(*valueCtx); ok {
 		clone := &valueCtx{Context: ctx}
 		// array copy assign
-		clone.builtin = ctx.builtin
+		copy(clone.builtin, ctx.builtin)
 		return clone
 	}
 	return parent

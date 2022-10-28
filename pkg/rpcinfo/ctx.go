@@ -74,5 +74,5 @@ func FreezeRPCInfo(ctx context.Context) context.Context {
 	if ri == nil {
 		return ctx
 	}
-	return NewCtxWithRPCInfo(ctx, freeze(ri))
+	return NewCtxWithRPCInfo(kcontext.Clone(ctx), freeze(ri))
 }
