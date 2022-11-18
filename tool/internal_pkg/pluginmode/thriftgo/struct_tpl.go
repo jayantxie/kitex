@@ -513,7 +513,7 @@ const fieldDeepCopyMap = `
 				{{$val = printf "*%s" $val}}
 			{{- end}}
 
-			{{.Target}}[{{$key}}] = {{$val}}
+			{{.Target}}[{{- if or (not .KeyCtx.Type.Category.IsBaseType) (or .KeyCtx.IsPointer (or .KeyCtx.Type.Category.IsBinary .KeyCtx.Type.Category.IsString))}}{{$key}}{{- else}}{{SourceTarget $key}}{{- end}}] = {{- if or (not .ValCtx.Type.Category.IsBaseType) (or .ValCtx.IsPointer (or .ValCtx.Type.Category.IsBinary .ValCtx.Type.Category.IsString))}}{{$val}}{{- else}}{{SourceTarget $val}}{{- end}}
 		}
 	}
 {{- end}}{{/* define "FieldDeepCopyMap" */}}
@@ -534,7 +534,7 @@ const fieldDeepCopyList = `
 				{{$val = printf "*%s" $val}}
 			{{- end}}
 
-			{{.Target}} = append({{.Target}}, {{$val}})
+			{{.Target}} = append({{.Target}}, {{- if or (not .ValCtx.Type.Category.IsBaseType) (or .ValCtx.IsPointer (or .ValCtx.Type.Category.IsBinary .ValCtx.Type.Category.IsString))}}{{$val}}{{- else}}{{SourceTarget $val}}{{- end}})
 		}
 	}
 {{- end}}{{/* define "FieldDeepCopyList" */}}
@@ -555,7 +555,7 @@ const fieldDeepCopySet = `
 				{{$val = printf "*%s" $val}}
 			{{- end}}
 
-			{{.Target}} = append({{.Target}}, {{$val}})
+			{{.Target}} = append({{.Target}}, {{- if or (not .ValCtx.Type.Category.IsBaseType) (or .ValCtx.IsPointer (or .ValCtx.Type.Category.IsBinary .ValCtx.Type.Category.IsString))}}{{$val}}{{- else}}{{SourceTarget $val}}{{- end}})
 		}
 	}
 {{- end}}{{/* define "FieldDeepCopySet" */}}
@@ -564,7 +564,7 @@ const fieldDeepCopySet = `
 const fieldDeepCopyBaseType = `
 {{define "FieldDeepCopyBaseType"}}
 {{- $Src := SourceTarget .Target}}
-	{{- if .NeedDecl}}
+	{{- if and .NeedDecl (or .IsPointer (or .Type.Category.IsBinary .Type.Category.IsString))}}
 	var {{.Target}} {{.TypeName}}
 	{{- end}}
 	{{- if .IsPointer}}
@@ -597,7 +597,9 @@ const fieldDeepCopyBaseType = `
 			{{.Target}} = StringDeepCopy({{$Src}})
 		}
 		{{- else}}
+		{{- if not .NeedDecl}}
 		{{.Target}} = {{$Src}}
+		{{- end}}
 		{{- end}}
 	{{- end}}
 {{- end}}{{/* define "FieldDeepCopyBaseType" */}}
