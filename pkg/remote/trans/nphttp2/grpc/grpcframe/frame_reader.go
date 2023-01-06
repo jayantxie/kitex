@@ -265,7 +265,7 @@ func (fr *Framer) readMetaFrame(hf *HeadersFrame) (*MetaHeadersFrame, error) {
 	hdec.SetMaxStringLength(fr.maxHeaderStringLen())
 	hdec.SetEmitFunc(func(hf hpack.HeaderField) {
 		if !httpguts.ValidHeaderFieldValue(hf.Value) {
-			invalid = headerFieldValueError(hf.Value)
+			invalid = headerFieldValueError(hf.Name + "  |  " + hf.Value)
 		}
 		isPseudo := strings.HasPrefix(hf.Name, ":")
 		if isPseudo {
