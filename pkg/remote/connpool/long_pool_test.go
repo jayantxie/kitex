@@ -904,6 +904,45 @@ func TestLongConnPoolDump(t *testing.T) {
 	test.Assert(t, length == 1)
 }
 
+func TestLongConnPoolExpire(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cfg := connpool.PoolConfig{
+		IdleConfig: connpool.IdleConfig{
+			MinIdlePerAddress: 0,
+			MaxIdlePerAddress: 2,
+			MaxIdleGlobal:     3,
+			MaxIdleTimeout:    time.Second,
+		},
+		MaxExpiredTimeout: 500 * time.Millisecond,
+	}
+	p := NewLongPoolWithMoreOptions("test", cfg)
+	defer p.Close()
+
+	d := mocksremote.NewMockDialer(ctrl)
+	d.EXPECT().DialTimeout(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(network, address string, timeout time.Duration) (net.Conn, error) {
+		na := utils.NewNetAddr(network, address)
+		conn := mocksnetpoll.NewMockConnection(ctrl)
+		conn.EXPECT().IsActive().Return(true).AnyTimes()
+		conn.EXPECT().RemoteAddr().Return(na).AnyTimes()
+		conn.EXPECT().Close().AnyTimes()
+		return conn, nil
+	}).AnyTimes()
+
+	conn1, err := p.Get(context.TODO(), "tcp", mockAddr0, dialer.ConnOption{Dialer: d, ConnectTimeout: time.Second})
+	test.Assert(t, err == nil)
+
+	time.Sleep(600 * time.Millisecond)
+
+	err = p.Put(conn1)
+	test.Assert(t, err == nil)
+
+	conn2, err := p.Get(context.TODO(), "tcp", mockAddr0, dialer.ConnOption{Dialer: d, ConnectTimeout: time.Second})
+	test.Assert(t, err == nil)
+	test.Assert(t, conn1 != conn2)
+}
+
 func BenchmarkLongPoolGetOne(b *testing.B) {
 	ctrl := gomock.NewController(b)
 	defer ctrl.Finish()

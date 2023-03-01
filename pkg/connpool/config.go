@@ -26,6 +26,11 @@ type IdleConfig struct {
 	MaxIdleTimeout    time.Duration
 }
 
+type PoolConfig struct {
+	IdleConfig
+	MaxExpiredTimeout time.Duration
+}
+
 const (
 	defaultMaxIdleTimeout = 30 * time.Second
 	minMaxIdleTimeout     = 2 * time.Second

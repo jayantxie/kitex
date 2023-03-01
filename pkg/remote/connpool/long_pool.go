@@ -72,8 +72,9 @@ func (na netAddr) String() string { return na.address }
 type longConn struct {
 	net.Conn
 	sync.RWMutex
-	deadline time.Time
-	address  string
+	deadline        time.Time
+	expiredDeadline *time.Time
+	address         string
 }
 
 // Close implements the net.Conn interface.
@@ -151,16 +152,19 @@ func (p *pool) Get() (*longConn, bool, int) {
 }
 
 // Put puts back a connection to the pool.
-func (p *pool) Put(o *longConn) bool {
+func (p *pool) Put(o *longConn) (recycled bool) {
+	now := time.Now()
+	if o.expiredDeadline != nil && o.expiredDeadline.Before(now) {
+		return
+	}
 	p.mu.Lock()
-	var recycled bool
 	if len(p.idleList) < p.maxIdle {
-		o.deadline = time.Now().Add(p.maxIdleTimeout)
+		o.deadline = now.Add(p.maxIdleTimeout)
 		p.idleList = append(p.idleList, o)
 		recycled = true
 	}
 	p.mu.Unlock()
-	return recycled
+	return
 }
 
 // Evict cleanups the expired connections.
@@ -223,12 +227,14 @@ func newPeer(
 	maxIdle int,
 	maxIdleTimeout time.Duration,
 	globalIdle *utils.MaxCounter,
+	maxExpiredTimeout time.Duration,
 ) *peer {
 	return &peer{
-		serviceName: serviceName,
-		addr:        addr,
-		globalIdle:  globalIdle,
-		pool:        newPool(minIdle, maxIdle, maxIdleTimeout),
+		serviceName:       serviceName,
+		addr:              addr,
+		globalIdle:        globalIdle,
+		pool:              newPool(minIdle, maxIdle, maxIdleTimeout),
+		maxExpiredTimeout: maxExpiredTimeout,
 	}
 }
 
@@ -239,7 +245,8 @@ type peer struct {
 	addr        net.Addr
 	globalIdle  *utils.MaxCounter
 	// pool
-	pool *pool
+	pool              *pool
+	maxExpiredTimeout time.Duration
 }
 
 // Get gets a connection with dialer and timeout. Dial a new connection if no idle connection in pool is available.
@@ -257,10 +264,15 @@ func (p *peer) Get(d remote.Dialer, timeout time.Duration, reporter Reporter, ad
 		return nil, err
 	}
 	reporter.ConnSucceed(Long, p.serviceName, p.addr)
-	return &longConn{
+	lc := &longConn{
 		Conn:    c,
 		address: addr,
-	}, nil
+	}
+	if p.maxExpiredTimeout > 0 {
+		t := time.Now().Add(p.maxExpiredTimeout)
+		lc.expiredDeadline = &t
+	}
+	return lc, nil
 }
 
 // Put puts a connection back to the peer.
@@ -303,12 +315,35 @@ func NewLongPool(serviceName string, idlConfig connpool.IdleConfig) *LongPool {
 				idlConfig.MinIdlePerAddress,
 				idlConfig.MaxIdlePerAddress,
 				idlConfig.MaxIdleTimeout,
-				limit)
+				limit,
+				0)
 		},
 		idleConfig: idlConfig,
 	}
 	// add this long pool into the sharedTicker
 	lp.sharedTicker = getSharedTicker(lp, idlConfig.MaxIdleTimeout)
+	return lp
+}
+
+func NewLongPoolWithMoreOptions(serviceName string, config connpool.PoolConfig) *LongPool {
+	limit := utils.NewMaxCounter(config.MaxIdleGlobal)
+	lp := &LongPool{
+		reporter:   &DummyReporter{},
+		globalIdle: limit,
+		newPeer: func(addr net.Addr) *peer {
+			return newPeer(
+				serviceName,
+				addr,
+				config.MinIdlePerAddress,
+				config.MaxIdlePerAddress,
+				config.MaxIdleTimeout,
+				limit,
+				config.MaxExpiredTimeout)
+		},
+		idleConfig: config.IdleConfig,
+	}
+	// add this long pool into the sharedTicker
+	lp.sharedTicker = getSharedTicker(lp, config.MaxIdleTimeout)
 	return lp
 }
 
