@@ -55,7 +55,12 @@ func RegisterReflectionMethod(svcInfo *serviceinfo.ServiceInfo) {
 	if svcInfo == nil {
 		return
 	}
-	svcInfo.Methods[ReflectionMethod] = reflectionMethodInfo
+	methods := make(map[string]serviceinfo.MethodInfo, len(svcInfo.Methods)+1)
+	for k, v := range svcInfo.Methods {
+		methods[k] = v
+	}
+	methods[ReflectionMethod] = reflectionMethodInfo
+	svcInfo.Methods = methods
 }
 
 func QueryThriftIDL(req *QueryIDLRequest) (resp *QueryIDLResponse, err error) {
@@ -135,11 +140,10 @@ func BatchQueryMethodsIDL(req *QueryIDLRequest) (resp *QueryIDLResponse, err err
 		methods[md.String()] = md
 	}
 
-	for idx, m := range methods {
-		is := m.IncludedStructs
-		for k, v := range is {
+	for _, m := range methods {
+		for k, v := range m.IncludedStructs {
 			// only record names
-			methods[idx].IncludedStructs[k] = nil
+			m.IncludedStructs[k] = nil
 			usedStructs[k] = NewStructDescriptor(k, v)
 		}
 	}

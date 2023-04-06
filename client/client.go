@@ -131,9 +131,6 @@ func (kc *kClient) init() (err error) {
 		return err
 	}
 	ctx := kc.initContext()
-	if kc.opt.ReflectionEnabled {
-		thriftreflection.RegisterReflectionMethod(kc.svcInfo)
-	}
 	kc.initMiddlewares(ctx)
 	kc.initDebugService()
 	kc.richRemoteOption()
@@ -144,15 +141,6 @@ func (kc *kClient) init() (err error) {
 		return err
 	}
 	kc.inited = true
-
-	// fixme: implement this part into rpal
-	if kc.opt.ReflectionEnabled {
-		err := kc.checkIDL()
-		if err != nil {
-			klog.Warnf("IDL Check:%v", err)
-		}
-	}
-
 	return nil
 }
 
@@ -468,6 +456,12 @@ func (kc *kClient) initDebugService() {
 }
 
 func (kc *kClient) richRemoteOption() {
+	if kc.opt.ReflectionEnabled {
+		ni := *kc.svcInfo
+		si := &ni
+		thriftreflection.RegisterReflectionMethod(si)
+		kc.svcInfo = si
+	}
 	kc.opt.RemoteOpt.SvcInfo = kc.svcInfo
 	// for client trans info handler
 	if len(kc.opt.MetaHandlers) > 0 {
@@ -695,16 +689,11 @@ func KitexReflectionQueryIDL(kc Client, ctx context.Context, queryIDLRequest *th
 
 // checkIDL fixme: implement this part into rpal lib
 func (kc *kClient) checkIDL() error {
-	var req *thriftreflection.QueryIDLRequest
-	if kc.svcInfo.ServiceName == "CombineService" {
-		methods := []string{}
-		for methodName := range kc.svcInfo.Methods {
-			methods = append(methods, methodName)
-		}
-		req = &thriftreflection.QueryIDLRequest{QueryType: "BatchQueryMethods", QueryInput: strings.Join(methods, ",")}
-	} else {
-		req = &thriftreflection.QueryIDLRequest{QueryType: "QueryService", QueryInput: kc.svcInfo.ServiceName}
+	var methods []string
+	for methodName := range kc.svcInfo.Methods {
+		methods = append(methods, methodName)
 	}
+	req := &thriftreflection.QueryIDLRequest{QueryType: "BatchQueryMethods", QueryInput: strings.Join(methods, ",")}
 	remoteResp, err := KitexReflectionQueryIDL(kc, context.Background(), req)
 	if err != nil {
 		return err
