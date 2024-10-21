@@ -70,8 +70,8 @@ func (l *serverLimiterHandler) OnInactive(ctx context.Context, conn net.Conn) co
 	return ctx
 }
 
-// OnMessage implements the remote.InboundHandler interface.
-func (l *serverLimiterHandler) OnMessage(ctx context.Context, args, result remote.Message) (context.Context, error) {
+// OnStreamRead implements the remote.InboundHandler interface.
+func (l *serverLimiterHandler) OnStreamRead(ctx context.Context, args remote.Message) (context.Context, error) {
 	if l.qpsLimitPostDecode {
 		if l.qpsLimit.Acquire(ctx) {
 			return ctx, nil
@@ -84,7 +84,7 @@ func (l *serverLimiterHandler) OnMessage(ctx context.Context, args, result remot
 	return ctx, nil
 }
 
-func DeepEqual(bound1, bound2 remote.InboundHandler) bool {
+func DeepEqual(bound1, bound2 ServerPipelineHandlers) bool {
 	switch b1 := bound1.(type) {
 	case *serverLimiterHandler:
 		b2, ok := bound2.(*serverLimiterHandler)

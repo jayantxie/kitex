@@ -26,7 +26,6 @@ import (
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
 
 	"github.com/cloudwego/kitex/pkg/endpoint"
-	"github.com/cloudwego/kitex/pkg/remote"
 	"github.com/cloudwego/kitex/pkg/remote/remotecli"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/streaming"
@@ -74,11 +73,6 @@ func (kc *kClient) invokeStreamingEndpoint() (endpoint.Endpoint, error) {
 	handler, err := kc.opt.RemoteOpt.CliHandlerFactory.NewTransHandler(kc.opt.RemoteOpt)
 	if err != nil {
 		return nil, err
-	}
-	for _, h := range kc.opt.MetaHandlers {
-		if shdlr, ok := h.(remote.StreamingMetaHandler); ok {
-			kc.opt.RemoteOpt.StreamingMetaHandlers = append(kc.opt.RemoteOpt.StreamingMetaHandlers, shdlr)
-		}
 	}
 
 	recvEndpoint := kc.opt.Streaming.BuildRecvInvokeChain(kc.invokeRecvEndpoint())

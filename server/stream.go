@@ -19,30 +19,12 @@ package server
 import (
 	"context"
 
-	"github.com/cloudwego/kitex/pkg/endpoint"
 	"github.com/cloudwego/kitex/pkg/streaming"
 )
 
 func (s *server) initStreamMiddlewares(ctx context.Context) {
-	s.opt.Streaming.EventHandler = s.opt.TracerCtl.GetStreamEventHandler()
-	s.opt.Streaming.InitMiddlewares(ctx)
-}
-
-func (s *server) buildStreamInvokeChain() {
-	s.opt.RemoteOpt.RecvEndpoint = s.opt.Streaming.BuildRecvInvokeChain(s.invokeRecvEndpoint())
-	s.opt.RemoteOpt.SendEndpoint = s.opt.Streaming.BuildSendInvokeChain(s.invokeSendEndpoint())
-}
-
-func (s *server) invokeRecvEndpoint() endpoint.RecvEndpoint {
-	return func(stream streaming.Stream, resp interface{}) (err error) {
-		return stream.RecvMsg(resp)
-	}
-}
-
-func (s *server) invokeSendEndpoint() endpoint.SendEndpoint {
-	return func(stream streaming.Stream, req interface{}) (err error) {
-		return stream.SendMsg(req)
-	}
+	s.opt.RemoteOpt.Streaming.EventHandler = s.opt.TracerCtl.GetStreamEventHandler()
+	s.opt.RemoteOpt.Streaming.InitMiddlewares(ctx)
 }
 
 // contextStream is responsible for solving ctx diverge in server side streaming.
