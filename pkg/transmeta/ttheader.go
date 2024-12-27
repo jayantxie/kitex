@@ -122,6 +122,9 @@ func (ch *clientTTHeaderHandler) ReadMeta(ctx context.Context, msg remote.Messag
 	if setter, ok := ri.Invocation().(rpcinfo.InvocationSetter); ok && bizErr != nil {
 		setter.SetBizStatusErr(bizErr)
 	}
+	if val, ok := strInfo[transmeta.HeaderConnectionReadyToReset]; ok {
+		rpcinfo.AsMutableEndpointInfo(ri.To()).SetTag(rpcinfo.ConnResetTag, val)
+	}
 	return ctx, nil
 }
 
@@ -189,6 +192,9 @@ func (sh *serverTTHeaderHandler) WriteMeta(ctx context.Context, msg remote.Messa
 		if len(bizErr.BizExtra()) != 0 {
 			strInfo[bizExtra], _ = utils.Map2JSONStr(bizErr.BizExtra())
 		}
+	}
+	if val, ok := ri.From().Tag(rpcinfo.ConnResetTag); ok {
+		strInfo[transmeta.HeaderConnectionReadyToReset] = val
 	}
 
 	return ctx, nil
