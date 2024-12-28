@@ -123,7 +123,9 @@ func (ch *clientTTHeaderHandler) ReadMeta(ctx context.Context, msg remote.Messag
 		setter.SetBizStatusErr(bizErr)
 	}
 	if val, ok := strInfo[transmeta.HeaderConnectionReadyToReset]; ok {
-		rpcinfo.AsMutableEndpointInfo(ri.To()).SetTag(rpcinfo.ConnResetTag, val)
+		if ei := rpcinfo.AsTaggable(ri.To()); ei != nil {
+			ei.SetTag(rpcinfo.ConnResetTag, val)
+		}
 	}
 	return ctx, nil
 }
