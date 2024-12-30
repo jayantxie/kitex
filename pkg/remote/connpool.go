@@ -20,6 +20,8 @@ import (
 	"context"
 	"net"
 	"time"
+
+	"github.com/cloudwego/kitex/pkg/rpcinfo"
 )
 
 // ConnOption contains configurations for connection pool.
@@ -42,6 +44,14 @@ type ConnPool interface {
 
 	// Close is to release resource of ConnPool, it is executed when client is closed.
 	Close() error
+}
+
+// RecycleConnPool provides custom methods to determine whether conn is to be reused or closed.
+type RecycleConnPool interface {
+	ConnPool
+
+	// Recycle judges the input ri and err parameters to determine whether conn is to be reused or closed
+	Recycle(ri rpcinfo.RPCInfo, err error, conn net.Conn)
 }
 
 // LongConnPool supports Clean connections to a desired address.

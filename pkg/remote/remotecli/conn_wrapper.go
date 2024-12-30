@@ -83,6 +83,10 @@ func (cm *ConnWrapper) ReleaseConn(err error, ri rpcinfo.RPCInfo) {
 		return
 	}
 	if cm.connPool != nil {
+		if rp, ok := cm.connPool.(remote.RecycleConnPool); ok {
+			rp.Recycle(ri, err, cm.conn)
+			return
+		}
 		if err == nil {
 			_, ok := ri.To().Tag(rpcinfo.ConnResetTag)
 			if ok || ri.Config().InteractionMode() == rpcinfo.Oneway {

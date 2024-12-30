@@ -19,6 +19,7 @@ package remotecli
 import (
 	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -164,6 +165,31 @@ func TestReleaseConnUseNilConn(t *testing.T) {
 	connW := NewConnWrapper(connPool)
 
 	connW.ReleaseConn(nil, ri)
+}
+
+// TestRecycleConn test recycle conn with remote.RecycleConnPool iface
+func TestRecycleConn(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	addr := utils.NewNetAddr("tcp", "to")
+	conn := mocksnetpoll.NewMockConnection(ctrl)
+
+	rcp := mocksremote.NewMockRecycleConnPool(ctrl)
+	rcp.EXPECT().Recycle(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ri rpcinfo.RPCInfo, err error, conn net.Conn) {
+		if !kerrors.IsTimeoutError(err) {
+			conn.Close()
+		}
+	}).AnyTimes()
+	rcp.EXPECT().Get(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(conn, nil).AnyTimes()
+	connW := NewConnWrapper(rcp)
+
+	ri := newMockRPCInfo(addr)
+	_, err := connW.GetConn(context.Background(), nil, ri)
+	test.Assert(t, err == nil)
+	connW.ReleaseConn(kerrors.ErrRPCTimeout, ri)
+	conn.EXPECT().Close().Times(1)
+	connW.ReleaseConn(errors.New("xxx"), ri)
 }
 
 // TestReleaseConn test release conn

@@ -27,6 +27,7 @@ import (
 	reflect "reflect"
 
 	remote "github.com/cloudwego/kitex/pkg/remote"
+	rpcinfo "github.com/cloudwego/kitex/pkg/rpcinfo"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -108,6 +109,98 @@ func (m *MockConnPool) Put(conn net.Conn) error {
 func (mr *MockConnPoolMockRecorder) Put(conn interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockConnPool)(nil).Put), conn)
+}
+
+// MockRecycleConnPool is a mock of RecycleConnPool interface.
+type MockRecycleConnPool struct {
+	ctrl     *gomock.Controller
+	recorder *MockRecycleConnPoolMockRecorder
+}
+
+// MockRecycleConnPoolMockRecorder is the mock recorder for MockRecycleConnPool.
+type MockRecycleConnPoolMockRecorder struct {
+	mock *MockRecycleConnPool
+}
+
+// NewMockRecycleConnPool creates a new mock instance.
+func NewMockRecycleConnPool(ctrl *gomock.Controller) *MockRecycleConnPool {
+	mock := &MockRecycleConnPool{ctrl: ctrl}
+	mock.recorder = &MockRecycleConnPoolMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockRecycleConnPool) EXPECT() *MockRecycleConnPoolMockRecorder {
+	return m.recorder
+}
+
+// Close mocks base method.
+func (m *MockRecycleConnPool) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockRecycleConnPoolMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRecycleConnPool)(nil).Close))
+}
+
+// Discard mocks base method.
+func (m *MockRecycleConnPool) Discard(conn net.Conn) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Discard", conn)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Discard indicates an expected call of Discard.
+func (mr *MockRecycleConnPoolMockRecorder) Discard(conn interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Discard", reflect.TypeOf((*MockRecycleConnPool)(nil).Discard), conn)
+}
+
+// Get mocks base method.
+func (m *MockRecycleConnPool) Get(ctx context.Context, network, address string, opt remote.ConnOption) (net.Conn, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, network, address, opt)
+	ret0, _ := ret[0].(net.Conn)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockRecycleConnPoolMockRecorder) Get(ctx, network, address, opt interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockRecycleConnPool)(nil).Get), ctx, network, address, opt)
+}
+
+// Put mocks base method.
+func (m *MockRecycleConnPool) Put(conn net.Conn) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Put", conn)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Put indicates an expected call of Put.
+func (mr *MockRecycleConnPoolMockRecorder) Put(conn interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Put", reflect.TypeOf((*MockRecycleConnPool)(nil).Put), conn)
+}
+
+// Recycle mocks base method.
+func (m *MockRecycleConnPool) Recycle(ri rpcinfo.RPCInfo, err error, conn net.Conn) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Recycle", ri, err, conn)
+}
+
+// Recycle indicates an expected call of Recycle.
+func (mr *MockRecycleConnPoolMockRecorder) Recycle(ri, err, conn interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Recycle", reflect.TypeOf((*MockRecycleConnPool)(nil).Recycle), ri, err, conn)
 }
 
 // MockLongConnPool is a mock of LongConnPool interface.
