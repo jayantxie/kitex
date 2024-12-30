@@ -195,7 +195,7 @@ func (sh *serverTTHeaderHandler) WriteMeta(ctx context.Context, msg remote.Messa
 			strInfo[bizExtra], _ = utils.Map2JSONStr(bizErr.BizExtra())
 		}
 	}
-	if val, ok := ri.From().Tag(rpcinfo.ConnResetTag); ok {
+	if val, ok := ri.To().Tag(rpcinfo.ConnResetTag); ok {
 		strInfo[transmeta.HeaderConnectionReadyToReset] = val
 	}
 

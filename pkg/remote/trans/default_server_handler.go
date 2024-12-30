@@ -300,7 +300,9 @@ func (t *svrTransHandler) writeErrorReplyIfNeeded(
 	if connReset {
 		// if connection needs to be closed, set ConnResetTag to response header
 		// to ensure the client won't reuse the connection.
-		rpcinfo.AsMutableEndpointInfo(ri.From()).SetTag(rpcinfo.ConnResetTag, "1")
+		if ei := rpcinfo.AsTaggable(ri.To()); ei != nil {
+			ei.SetTag(rpcinfo.ConnResetTag, "1")
+		}
 	}
 	ctx, err = t.transPipe.Write(ctx, conn, errMsg)
 	if err != nil {
