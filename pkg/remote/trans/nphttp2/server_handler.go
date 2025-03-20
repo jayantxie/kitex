@@ -29,6 +29,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/bytedance/gopkg/cloud/metainfo"
 	"github.com/cloudwego/netpoll"
 
 	"github.com/cloudwego/kitex/pkg/endpoint"
@@ -40,6 +41,7 @@ import (
 	"github.com/cloudwego/kitex/pkg/remote/codec/grpc"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/codes"
 	grpcTransport "github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/grpc"
+	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/metadata"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/status"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
@@ -258,6 +260,12 @@ func (t *svrTransHandler) handleFunc(s *grpcTransport.Stream, svrTrans *SvrTrans
 			err = t.inkHdlFunc(rCtx, args, nil)
 		}
 	}
+
+	// sets backward values to http trailer
+	// TODO: add OnStreamDone MetaHandler hook to process this logic
+	trailer := metadata.MD{}
+	metainfo.SetBackwardValuesToHTTPHeader(rCtx, metainfo.HTTPHeader(trailer))
+	s.SetTrailer(trailer)
 
 	if err != nil {
 		tr.WriteStatus(s, convertStatus(err))

@@ -20,6 +20,8 @@ import (
 	"context"
 	"net"
 
+	"github.com/bytedance/gopkg/cloud/metainfo"
+
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/codes"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/metadata"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/status"
@@ -150,6 +152,8 @@ func receiveHeaderAndTrailer(ctx context.Context, conn net.Conn) context.Context
 		} else {
 			ctx = context.WithValue(ctx, trailerKey{}, &md)
 		}
+		// TODO: add OnStreamDone MetaHandler hook to process this logic
+		metainfo.SetBackwardValuesFromHTTPHeader(ctx, metainfo.HTTPHeader(md))
 	}
 	return ctx
 }
