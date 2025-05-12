@@ -37,7 +37,7 @@ func GetPayloadCodec(message Message) (PayloadCodec, error) {
 	if message.PayloadCodec() != nil {
 		return message.PayloadCodec(), nil
 	}
-	ct := message.ProtocolInfo().CodecType
+	ct := message.RPCInfo().Config().PayloadCodec()
 	pc := payloadCodecs[ct]
 	if pc == nil {
 		return nil, fmt.Errorf("payload codec not found with codecType=%v", ct)

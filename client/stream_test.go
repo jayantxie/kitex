@@ -273,8 +273,7 @@ func Test_stream_Header(t *testing.T) {
 		}
 		cr := mock_remote.NewMockConnReleaser(ctrl)
 		cr.EXPECT().ReleaseConn(gomock.Any(), gomock.Any()).Times(0)
-		scr := remotecli.NewStreamConnManager(cr)
-		s := newStream(ctx, st, scr, &kClient{}, nil, serviceinfo.StreamingBidirectional, nil, nil, nil, nil, nil)
+		s := newStream(ctx, st, cr, &kClient{}, nil, serviceinfo.StreamingBidirectional, nil, nil, nil, nil, nil)
 		md, err := s.Header()
 
 		test.Assert(t, err == nil)

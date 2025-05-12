@@ -26,7 +26,6 @@ import (
 	"github.com/cloudwego/kitex/pkg/endpoint"
 	"github.com/cloudwego/kitex/pkg/endpoint/cep"
 	"github.com/cloudwego/kitex/pkg/kerrors"
-	"github.com/cloudwego/kitex/pkg/remote"
 	"github.com/cloudwego/kitex/pkg/remote/remotecli"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/metadata"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
@@ -96,17 +95,6 @@ func (kc *kClient) StreamX(ctx context.Context, method string) (streaming.Client
 }
 
 func (kc *kClient) invokeStreamingEndpoint() (endpoint.Endpoint, error) {
-	var handler remote.ClientTransHandler
-	var err error
-	if kc.opt.RemoteOpt.GRPCStreamingCliHandlerFactory != nil {
-		handler, err = kc.opt.RemoteOpt.GRPCStreamingCliHandlerFactory.NewTransHandler(kc.opt.RemoteOpt)
-	} else {
-		handler, err = kc.opt.RemoteOpt.CliHandlerFactory.NewTransHandler(kc.opt.RemoteOpt)
-	}
-	if err != nil {
-		return nil, err
-	}
-
 	// recvEP and sendEP are the endpoints for the new stream interface,
 	// and grpcRecvEP and grpcSendEP are the endpoints for the old grpc stream interface,
 	// the latter two are going to be removed in the future.
@@ -118,12 +106,14 @@ func (kc *kClient) invokeStreamingEndpoint() (endpoint.Endpoint, error) {
 	return func(ctx context.Context, req, resp interface{}) (err error) {
 		// req and resp as &streaming.Stream
 		ri := rpcinfo.GetRPCInfo(ctx)
-		st, scm, err := remotecli.NewStream(ctx, ri, handler, kc.opt.RemoteOpt)
+		var st streaming.ClientStream
+		var cr remotecli.ConnReleaser
+		st, cr, err = remotecli.NewStream(ctx, ri, kc.opt.RemoteOpt)
 		if err != nil {
 			return
 		}
 
-		clientStream := newStream(ctx, st, scm, kc, ri, kc.getStreamingMode(ri), sendEP, recvEP, kc.opt.StreamOptions.EventHandler, grpcSendEP, grpcRecvEP)
+		clientStream := newStream(ctx, st, cr, kc, ri, kc.getStreamingMode(ri), sendEP, recvEP, kc.opt.StreamOptions.EventHandler, grpcSendEP, grpcRecvEP)
 		rresp := resp.(*streaming.Result)
 		rresp.ClientStream = clientStream
 		rresp.Stream = clientStream.GetGRPCStream()
@@ -143,7 +133,7 @@ type stream struct {
 	streaming.ClientStream
 	grpcStream   *grpcStream
 	ctx          context.Context
-	scm          *remotecli.StreamConnManager
+	cr           remotecli.ConnReleaser
 	kc           *kClient
 	ri           rpcinfo.RPCInfo
 	eventHandler internal_stream.StreamEventHandler
@@ -161,13 +151,13 @@ var (
 	_ streaming.WithDoFinish     = (*grpcStream)(nil)
 )
 
-func newStream(ctx context.Context, s streaming.ClientStream, scm *remotecli.StreamConnManager, kc *kClient, ri rpcinfo.RPCInfo, mode serviceinfo.StreamingMode,
+func newStream(ctx context.Context, s streaming.ClientStream, cr remotecli.ConnReleaser, kc *kClient, ri rpcinfo.RPCInfo, mode serviceinfo.StreamingMode,
 	sendEP cep.StreamSendEndpoint, recvEP cep.StreamRecvEndpoint, eventHandler internal_stream.StreamEventHandler, grpcSendEP endpoint.SendEndpoint, grpcRecvEP endpoint.RecvEndpoint,
 ) *stream {
 	st := &stream{
 		ClientStream:  s,
 		ctx:           ctx,
-		scm:           scm,
+		cr:            cr,
 		kc:            kc,
 		ri:            ri,
 		streamingMode: mode,
@@ -198,17 +188,7 @@ func (s *stream) Header() (hd streaming.Header, err error) {
 // RecvMsg receives a message from the server.
 // If an error is returned, stream.DoFinish() will be called to record the end of stream
 func (s *stream) RecvMsg(ctx context.Context, m interface{}) (err error) {
-	if !s.recv.EqualsTo(recvEndpoint) {
-		// If the values are not equal, it indicates the presence of custom middleware.
-		// To prevent errors caused by middleware code that relies on rpcinfo when users
-		// incorrectly pass a context lacking rpcinfo, this safeguard logic is added to
-		// propagate the rpcinfo from the stream to the incoming context.
-		ri := rpcinfo.GetRPCInfo(ctx)
-		if ri != s.ri {
-			ctx = rpcinfo.NewCtxWithRPCInfo(ctx, s.ri)
-		}
-	}
-	err = s.recv(ctx, s.ClientStream, m)
+	err = s.recv(s.ctx, s.ClientStream, m)
 	if err == nil {
 		// BizStatusErr is returned by the server handle, meaning the stream is ended;
 		// And it should be returned to the calling business code for error handling
@@ -226,14 +206,7 @@ func (s *stream) RecvMsg(ctx context.Context, m interface{}) (err error) {
 // SendMsg sends a message to the server.
 // If an error is returned, stream.DoFinish() will be called to record the end of stream
 func (s *stream) SendMsg(ctx context.Context, m interface{}) (err error) {
-	if !s.send.EqualsTo(sendEndpoint) {
-		// same with RecvMsg
-		ri := rpcinfo.GetRPCInfo(ctx)
-		if ri != s.ri {
-			ctx = rpcinfo.NewCtxWithRPCInfo(ctx, s.ri)
-		}
-	}
-	err = s.send(ctx, s.ClientStream, m)
+	err = s.send(s.ctx, s.ClientStream, m)
 	if s.eventHandler != nil {
 		s.eventHandler(s.ctx, stats.StreamSend, err)
 	}
@@ -254,8 +227,8 @@ func (s *stream) DoFinish(err error) {
 		// only rpc errors are reported
 		err = nil
 	}
-	if s.scm != nil {
-		s.scm.ReleaseConn(err, s.ri)
+	if s.cr != nil {
+		s.cr.ReleaseConn(err, s.ri)
 	}
 	s.kc.opt.TracerCtl.DoFinish(s.ctx, s.ri, err)
 }

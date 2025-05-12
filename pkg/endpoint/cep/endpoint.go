@@ -19,7 +19,6 @@ package cep
 
 import (
 	"context"
-	"unsafe"
 
 	"github.com/cloudwego/kitex/pkg/streaming"
 )
@@ -36,10 +35,6 @@ type StreamMiddlewareBuilder func(ctx context.Context) StreamMiddleware
 // StreamRecvEndpoint represent one Stream Recv call, the inner endpoint will call stream.RecvMsg(ctx, message).
 type StreamRecvEndpoint func(ctx context.Context, stream streaming.ClientStream, message interface{}) (err error)
 
-func (e StreamRecvEndpoint) EqualsTo(e2 StreamRecvEndpoint) bool {
-	return *(*unsafe.Pointer)(unsafe.Pointer(&e)) == *(*unsafe.Pointer)(unsafe.Pointer(&e2))
-}
-
 // StreamRecvMiddleware deal with input StreamRecvEndpoint and output StreamRecvEndpoint.
 type StreamRecvMiddleware func(next StreamRecvEndpoint) StreamRecvEndpoint
 
@@ -48,10 +43,6 @@ type StreamRecvMiddlewareBuilder func(ctx context.Context) StreamRecvMiddleware
 
 // StreamSendEndpoint represent one Stream Send call.
 type StreamSendEndpoint func(ctx context.Context, stream streaming.ClientStream, message interface{}) (err error)
-
-func (e StreamSendEndpoint) EqualsTo(e2 StreamSendEndpoint) bool {
-	return *(*unsafe.Pointer)(unsafe.Pointer(&e)) == *(*unsafe.Pointer)(unsafe.Pointer(&e2))
-}
 
 // StreamSendMiddleware deal with input StreamSendEndpoint and output StreamSendEndpoint.
 type StreamSendMiddleware func(next StreamSendEndpoint) StreamSendEndpoint

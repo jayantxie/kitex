@@ -486,10 +486,10 @@ func (s *server) initBasicRemoteOption() {
 func (s *server) richRemoteOption() {
 	s.initBasicRemoteOption()
 
-	s.addBoundHandlers(s.opt.RemoteOpt)
+	s.addPipelineHandlers(s.opt.RemoteOpt)
 }
 
-func (s *server) addBoundHandlers(opt *remote.ServerOption) {
+func (s *server) addPipelineHandlers(opt *remote.ServerOption) {
 	// add profiler meta handler, which should be exec after other MetaHandlers
 	if opt.Profiler != nil && opt.ProfilerMessageTagging != nil {
 		s.opt.MetaHandlers = append(s.opt.MetaHandlers,
@@ -498,19 +498,14 @@ func (s *server) addBoundHandlers(opt *remote.ServerOption) {
 	}
 	// for server trans info handler
 	if len(s.opt.MetaHandlers) > 0 {
-		transInfoHdlr := bound.NewTransMetaHandler(s.opt.MetaHandlers)
+		transInfoHdlr := bound.NewServerMetaHandler(s.opt.MetaHandlers)
 		// meta handler exec before boundHandlers which add with option
-		doAddBoundHandlerToHead(transInfoHdlr, opt)
-		for _, h := range s.opt.MetaHandlers {
-			if shdlr, ok := h.(remote.StreamingMetaHandler); ok {
-				opt.StreamingMetaHandlers = append(opt.StreamingMetaHandlers, shdlr)
-			}
-		}
+		opt.PrependPipelineHandler(transInfoHdlr)
 	}
 
 	limitHdlr := s.buildLimiterWithOpt()
 	if limitHdlr != nil {
-		doAddBoundHandler(limitHdlr, opt)
+		opt.AppendPipelineHandler(limitHdlr)
 	}
 }
 
@@ -524,7 +519,7 @@ func (s *server) addBoundHandlers(opt *remote.ServerOption) {
  * service, use the `serverLimiterOnReadHandler` whose rate limiting takes effect in the OnRead
  * callback.
  */
-func (s *server) buildLimiterWithOpt() (handler remote.InboundHandler) {
+func (s *server) buildLimiterWithOpt() (handler remote.ServerPipelineHandler) {
 	limits := s.opt.Limit.Limits
 	connLimit := s.opt.Limit.ConLimit
 	qpsLimit := s.opt.Limit.QPSLimit
@@ -565,38 +560,6 @@ func (s *server) check() error {
 	return s.svcs.check(s.opt.RefuseTrafficWithoutServiceName)
 }
 
-func doAddBoundHandlerToHead(h remote.BoundHandler, opt *remote.ServerOption) {
-	add := false
-	if ih, ok := h.(remote.InboundHandler); ok {
-		handlers := []remote.InboundHandler{ih}
-		opt.Inbounds = append(handlers, opt.Inbounds...)
-		add = true
-	}
-	if oh, ok := h.(remote.OutboundHandler); ok {
-		handlers := []remote.OutboundHandler{oh}
-		opt.Outbounds = append(handlers, opt.Outbounds...)
-		add = true
-	}
-	if !add {
-		panic("invalid BoundHandler: must implement InboundHandler or OutboundHandler")
-	}
-}
-
-func doAddBoundHandler(h remote.BoundHandler, opt *remote.ServerOption) {
-	add := false
-	if ih, ok := h.(remote.InboundHandler); ok {
-		opt.Inbounds = append(opt.Inbounds, ih)
-		add = true
-	}
-	if oh, ok := h.(remote.OutboundHandler); ok {
-		opt.Outbounds = append(opt.Outbounds, oh)
-		add = true
-	}
-	if !add {
-		panic("invalid BoundHandler: must implement InboundHandler or OutboundHandler")
-	}
-}
-
 func (s *server) newSvrTransHandler() (handler remote.ServerTransHandler, err error) {
 	transHdlrFactory := s.opt.RemoteOpt.SvrHandlerFactory
 	transHdlr, err := transHdlrFactory.NewTransHandler(s.opt.RemoteOpt)
@@ -606,13 +569,9 @@ func (s *server) newSvrTransHandler() (handler remote.ServerTransHandler, err er
 	if setter, ok := transHdlr.(remote.InvokeHandleFuncSetter); ok {
 		setter.SetInvokeHandleFunc(s.eps)
 	}
-	transPl := remote.NewTransPipeline(transHdlr)
-
-	for _, ib := range s.opt.RemoteOpt.Inbounds {
-		transPl.AddInboundHandler(ib)
-	}
-	for _, ob := range s.opt.RemoteOpt.Outbounds {
-		transPl.AddOutboundHandler(ob)
+	transPl := remote.NewServerTransPipeline(transHdlr)
+	for _, ib := range s.opt.RemoteOpt.ServerPipelineHandlers {
+		transPl.AddHandler(ib)
 	}
 	return transPl, nil
 }

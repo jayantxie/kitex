@@ -21,7 +21,6 @@ import (
 	"net"
 
 	"github.com/cloudwego/kitex/pkg/endpoint"
-	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/streaming"
 )
 
@@ -35,32 +34,21 @@ type ServerTransHandlerFactory interface {
 	NewTransHandler(opt *ServerOption) (ServerTransHandler, error)
 }
 
-// TransReadWriter .
-type TransReadWriter interface {
-	Write(ctx context.Context, conn net.Conn, send Message) (nctx context.Context, err error)
-	Read(ctx context.Context, conn net.Conn, msg Message) (nctx context.Context, err error)
-}
-
-// TransHandler is similar to the handler role in netty
-// Transport can be refactored to support pipeline, and then is able to support other extensions at conn level.
-type TransHandler interface {
-	TransReadWriter
+type ClientTransHandler interface {
 	OnInactive(ctx context.Context, conn net.Conn)
 	OnError(ctx context.Context, err error, conn net.Conn)
-	OnMessage(ctx context.Context, args, result Message) (context.Context, error)
-	SetPipeline(pipeline *TransPipeline)
-}
-
-// ClientTransHandler is just TransHandler.
-type ClientTransHandler interface {
-	TransHandler
+	NewStream(ctx context.Context, conn net.Conn) (streaming.ClientStream, error)
+	SetPipeline(pipeline *ClientTransPipeline)
 }
 
 // ServerTransHandler have some new functions.
 type ServerTransHandler interface {
-	TransHandler
+	OnInactive(ctx context.Context, conn net.Conn)
+	OnError(ctx context.Context, err error, conn net.Conn)
 	OnActive(ctx context.Context, conn net.Conn) (context.Context, error)
 	OnRead(ctx context.Context, conn net.Conn) error
+	OnStream(ctx context.Context, st streaming.ServerStream) error
+	SetPipeline(pipeline *ServerTransPipeline)
 }
 
 // InvokeHandleFuncSetter is used to set invoke handle func.
@@ -73,8 +61,8 @@ type GracefulShutdown interface {
 	GracefulShutdown(ctx context.Context) error
 }
 
-// ClientStreamFactory is used to create a stream for client.
-// NOTICE: might be updated without compatibility guarantee in the future.
-type ClientStreamFactory interface {
-	NewStream(ctx context.Context, ri rpcinfo.RPCInfo) (streaming.ClientStream, error)
+// TransReadWriter is for default trans handler.
+type TransReadWriter interface {
+	Write(ctx context.Context, conn net.Conn, send Message) (nctx context.Context, err error)
+	Read(ctx context.Context, conn net.Conn, msg Message) (nctx context.Context, err error)
 }

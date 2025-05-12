@@ -27,46 +27,8 @@ import (
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
 	"github.com/cloudwego/kitex/pkg/streaming"
 	"github.com/cloudwego/kitex/pkg/utils"
+	"github.com/cloudwego/kitex/transport"
 )
-
-// Option is used to pack the inbound and outbound handlers.
-type Option struct {
-	Outbounds []OutboundHandler
-
-	Inbounds []InboundHandler
-
-	StreamingMetaHandlers []StreamingMetaHandler
-}
-
-// PrependBoundHandler adds a BoundHandler to the head.
-func (o *Option) PrependBoundHandler(h BoundHandler) {
-	switch v := h.(type) {
-	case DuplexBoundHandler:
-		o.Inbounds = append([]InboundHandler{v}, o.Inbounds...)
-		o.Outbounds = append([]OutboundHandler{v}, o.Outbounds...)
-	case InboundHandler:
-		o.Inbounds = append([]InboundHandler{v}, o.Inbounds...)
-	case OutboundHandler:
-		o.Outbounds = append([]OutboundHandler{v}, o.Outbounds...)
-	default:
-		panic("invalid BoundHandler: must implement InboundHandler or OutboundHandler")
-	}
-}
-
-// AppendBoundHandler adds a BoundHandler to the end.
-func (o *Option) AppendBoundHandler(h BoundHandler) {
-	switch v := h.(type) {
-	case DuplexBoundHandler:
-		o.Inbounds = append(o.Inbounds, v)
-		o.Outbounds = append(o.Outbounds, v)
-	case InboundHandler:
-		o.Inbounds = append(o.Inbounds, v)
-	case OutboundHandler:
-		o.Outbounds = append(o.Outbounds, v)
-	default:
-		panic("invalid BoundHandler: must implement InboundHandler or OutboundHandler")
-	}
-}
 
 // ServerOption contains option that is used to init the remote server.
 type ServerOption struct {
@@ -116,37 +78,107 @@ type ServerOption struct {
 	// TTHeaderStreaming
 	TTHeaderStreamingOptions TTHeaderStreamingOptions
 
-	Option
+	ServerPipelineHandlers []ServerPipelineHandler
 
 	// for thrift streaming, this is enabled by default
 	// for grpc(protobuf) streaming, it's disabled by default, enable with server.WithCompatibleMiddlewareForUnary
 	CompatibleMiddlewareForUnary bool
 }
 
+func (o *ServerOption) PrependPipelineHandler(h ServerPipelineHandler) {
+	o.ServerPipelineHandlers = append([]ServerPipelineHandler{h}, o.ServerPipelineHandlers...)
+}
+
+func (o *ServerOption) AppendPipelineHandler(h ServerPipelineHandler) {
+	o.ServerPipelineHandlers = append(o.ServerPipelineHandlers, h)
+}
+
 // ClientOption is used to init the remote client.
 type ClientOption struct {
 	SvcInfo *serviceinfo.ServiceInfo
-
-	CliHandlerFactory ClientTransHandlerFactory
 
 	Codec Codec
 
 	PayloadCodec PayloadCodec
 
-	ConnPool ConnPool
-
 	Dialer Dialer
 
-	Option
+	ClientPipelineHandlers []ClientPipelineHandler
 
 	EnableConnPoolReporter bool
+
+	// default
+	CliHandlerFactory ClientTransHandlerFactory
+	ConnPool          ConnPool
+	cliHandler        ClientTransHandler
 
 	// for grpc streaming, only used for streaming call
 	GRPCStreamingCliHandlerFactory ClientTransHandlerFactory
 	GRPCStreamingConnPool          ConnPool
+	grpcStreamingHandler           ClientTransHandler
 
 	// for ttheader streaming, only used for streaming call
-	TTHeaderStreamingProvider ClientStreamFactory
+	TTHeaderStreamingCliHandlerFactory ClientTransHandlerFactory
+	TTHeaderStreamingConnPool          ConnPool
+	ttHeaderStreamingHandler           ClientTransHandler
+}
+
+func (o *ClientOption) PrependPipelineHandler(h ClientPipelineHandler) {
+	o.ClientPipelineHandlers = append([]ClientPipelineHandler{h}, o.ClientPipelineHandlers...)
+}
+
+func (o *ClientOption) AppendPipelineHandler(h ClientPipelineHandler) {
+	o.ClientPipelineHandlers = append(o.ClientPipelineHandlers, h)
+}
+
+func newCliTransHandler(factory ClientTransHandlerFactory, opt *ClientOption) (ClientTransHandler, error) {
+	handler, err := factory.NewTransHandler(opt)
+	if err != nil {
+		return nil, err
+	}
+	transPl := NewClientTransPipeline(handler)
+	for _, h := range opt.ClientPipelineHandlers {
+		transPl.AddHandler(h)
+	}
+	handler.SetPipeline(transPl)
+	return transPl, nil
+}
+
+func (o *ClientOption) InitializeTransHandler() (err error) {
+	o.cliHandler, err = newCliTransHandler(o.CliHandlerFactory, o)
+	if err != nil {
+		return err
+	}
+	if o.GRPCStreamingCliHandlerFactory != nil {
+		o.grpcStreamingHandler, err = newCliTransHandler(o.GRPCStreamingCliHandlerFactory, o)
+		if err != nil {
+			return err
+		}
+	}
+	if o.TTHeaderStreamingCliHandlerFactory != nil {
+		o.ttHeaderStreamingHandler, err = newCliTransHandler(o.TTHeaderStreamingCliHandlerFactory, o)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (o *ClientOption) GetTransHandlerAndConnPool(tp transport.Protocol) (handler ClientTransHandler, pool ConnPool) {
+	if tp&transport.TTHeaderStreaming == transport.TTHeaderStreaming {
+		// ttheader streaming
+		pool = o.TTHeaderStreamingConnPool
+		handler = o.ttHeaderStreamingHandler
+		return
+	}
+	if tp&transport.GRPC == transport.GRPC && o.grpcStreamingHandler != nil {
+		// grpc streaming
+		pool = o.GRPCStreamingConnPool
+		handler = o.grpcStreamingHandler
+	}
+	pool = o.ConnPool
+	handler = o.cliHandler
+	return
 }
 
 type TTHeaderStreamingOption struct {
