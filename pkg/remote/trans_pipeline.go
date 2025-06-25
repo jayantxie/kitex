@@ -19,6 +19,8 @@ package remote
 import (
 	"context"
 	"net"
+
+	"github.com/cloudwego/kitex/pkg/endpoint"
 )
 
 // BoundHandler is used to abstract the bound handler.
@@ -47,25 +49,38 @@ type DuplexBoundHandler interface {
 
 // TransPipeline contains TransHandlers.
 type TransPipeline struct {
-	netHdlr TransHandler
-
 	inboundHdrls  []InboundHandler
 	outboundHdrls []OutboundHandler
 }
 
-var (
-	_ TransHandler       = &TransPipeline{}
-	_ ServerTransHandler = &TransPipeline{}
-)
-
-func newTransPipeline() *TransPipeline {
-	return &TransPipeline{}
+type CliTransPipeline struct {
+	TransPipeline
+	cliNetHdlr ClientTransHandler
 }
 
-// NewTransPipeline is used to create a new TransPipeline.
-func NewTransPipeline(netHdlr TransHandler) *TransPipeline {
-	transPl := newTransPipeline()
-	transPl.netHdlr = netHdlr
+type SvrTransPipeline struct {
+	TransPipeline
+	svrNetHdlr ServerTransHandler
+}
+
+var (
+	_ ClientTransHandler = &CliTransPipeline{}
+	_ ServerTransHandler = &SvrTransPipeline{}
+)
+
+// NewCliTransPipeline is used to create a new TransPipeline for client.
+// Only used for ping pong handlers.
+func NewCliTransPipeline(netHdlr ClientTransHandler) *CliTransPipeline {
+	transPl := &CliTransPipeline{}
+	transPl.cliNetHdlr = netHdlr
+	return transPl
+}
+
+// NewSvrTransPipeline is used to create a new TransPipeline for server.
+// Only used for ping pong handlers.
+func NewSvrTransPipeline(netHdlr ServerTransHandler) *SvrTransPipeline {
+	transPl := &SvrTransPipeline{}
+	transPl.svrNetHdlr = netHdlr
 	netHdlr.SetPipeline(transPl)
 	return transPl
 }
@@ -90,58 +105,9 @@ func (p *TransPipeline) Write(ctx context.Context, conn net.Conn, sendMsg Messag
 			return ctx, err
 		}
 	}
-	return p.netHdlr.Write(ctx, conn, sendMsg)
+	return ctx, err
 }
 
-// OnActive implements the InboundHandler interface.
-func (p *TransPipeline) OnActive(ctx context.Context, conn net.Conn) (context.Context, error) {
-	var err error
-	for _, h := range p.inboundHdrls {
-		ctx, err = h.OnActive(ctx, conn)
-		if err != nil {
-			return ctx, err
-		}
-	}
-	if netHdlr, ok := p.netHdlr.(ServerTransHandler); ok {
-		return netHdlr.OnActive(ctx, conn)
-	}
-	return ctx, nil
-}
-
-// OnInactive implements the InboundHandler interface.
-func (p *TransPipeline) OnInactive(ctx context.Context, conn net.Conn) {
-	for _, h := range p.inboundHdrls {
-		ctx = h.OnInactive(ctx, conn)
-	}
-	p.netHdlr.OnInactive(ctx, conn)
-}
-
-// OnRead implements the InboundHandler interface.
-func (p *TransPipeline) OnRead(ctx context.Context, conn net.Conn) error {
-	var err error
-	for _, h := range p.inboundHdrls {
-		ctx, err = h.OnRead(ctx, conn)
-		if err != nil {
-			return err
-		}
-	}
-	if netHdlr, ok := p.netHdlr.(ServerTransHandler); ok {
-		return netHdlr.OnRead(ctx, conn)
-	}
-	return nil
-}
-
-// Read reads from conn.
-func (p *TransPipeline) Read(ctx context.Context, conn net.Conn, msg Message) (nctx context.Context, err error) {
-	return p.netHdlr.Read(ctx, conn, msg)
-}
-
-// OnError calls
-func (p *TransPipeline) OnError(ctx context.Context, err error, conn net.Conn) {
-	p.netHdlr.OnError(ctx, err, conn)
-}
-
-// OnMessage implements the InboundHandler interface.
 func (p *TransPipeline) OnMessage(ctx context.Context, args, result Message) (context.Context, error) {
 	var err error
 	for _, h := range p.inboundHdrls {
@@ -153,17 +119,102 @@ func (p *TransPipeline) OnMessage(ctx context.Context, args, result Message) (co
 	if result.MessageType() == Exception {
 		return ctx, nil
 	}
-	return p.netHdlr.OnMessage(ctx, args, result)
+	return ctx, err
+}
+
+func (p *CliTransPipeline) Write(ctx context.Context, conn net.Conn, sendMsg Message) (nctx context.Context, err error) {
+	if ctx, err = p.TransPipeline.Write(ctx, conn, sendMsg); err != nil {
+		return ctx, err
+	}
+	return p.cliNetHdlr.Write(ctx, conn, sendMsg)
+}
+
+// Read reads from conn.
+func (p *CliTransPipeline) Read(ctx context.Context, conn net.Conn, msg Message) (nctx context.Context, err error) {
+	return p.cliNetHdlr.Read(ctx, conn, msg)
+}
+
+func (p *CliTransPipeline) OnMessage(ctx context.Context, args, result Message) (nctx context.Context, err error) {
+	if ctx, err = p.TransPipeline.OnMessage(ctx, args, result); err != nil {
+		return ctx, err
+	}
+	return p.cliNetHdlr.OnMessage(ctx, args, result)
+}
+
+// OnError calls
+func (p *CliTransPipeline) OnError(ctx context.Context, err error, conn net.Conn) {
+	p.cliNetHdlr.OnError(ctx, err, conn)
+}
+
+// OnActive implements the InboundHandler interface.
+func (p *SvrTransPipeline) OnActive(ctx context.Context, conn net.Conn) (context.Context, error) {
+	var err error
+	for _, h := range p.inboundHdrls {
+		ctx, err = h.OnActive(ctx, conn)
+		if err != nil {
+			return ctx, err
+		}
+	}
+	return p.svrNetHdlr.OnActive(ctx, conn)
+}
+
+// OnInactive implements the InboundHandler interface.
+func (p *SvrTransPipeline) OnInactive(ctx context.Context, conn net.Conn) {
+	for _, h := range p.inboundHdrls {
+		ctx = h.OnInactive(ctx, conn)
+	}
+	p.svrNetHdlr.OnInactive(ctx, conn)
+}
+
+// OnRead implements the InboundHandler interface.
+func (p *SvrTransPipeline) OnRead(ctx context.Context, conn net.Conn) error {
+	var err error
+	for _, h := range p.inboundHdrls {
+		ctx, err = h.OnRead(ctx, conn)
+		if err != nil {
+			return err
+		}
+	}
+	return p.svrNetHdlr.OnRead(ctx, conn)
+}
+
+func (p *SvrTransPipeline) Write(ctx context.Context, conn net.Conn, sendMsg Message) (nctx context.Context, err error) {
+	if ctx, err = p.TransPipeline.Write(ctx, conn, sendMsg); err != nil {
+		return ctx, err
+	}
+	return p.svrNetHdlr.Write(ctx, conn, sendMsg)
+}
+
+// Read reads from conn.
+func (p *SvrTransPipeline) Read(ctx context.Context, conn net.Conn, msg Message) (nctx context.Context, err error) {
+	return p.svrNetHdlr.Read(ctx, conn, msg)
+}
+
+// OnError calls
+func (p *SvrTransPipeline) OnError(ctx context.Context, err error, conn net.Conn) {
+	p.svrNetHdlr.OnError(ctx, err, conn)
+}
+
+// OnMessage implements the InboundHandler interface.
+func (p *SvrTransPipeline) OnMessage(ctx context.Context, args, result Message) (nctx context.Context, err error) {
+	if ctx, err = p.TransPipeline.OnMessage(ctx, args, result); err != nil {
+		return ctx, err
+	}
+	return p.svrNetHdlr.OnMessage(ctx, args, result)
+}
+
+func (p *SvrTransPipeline) SetInvokeHandleFunc(inkHdlFunc endpoint.Endpoint) {
+	p.svrNetHdlr.SetInvokeHandleFunc(inkHdlFunc)
 }
 
 // SetPipeline does nothing now.
-func (p *TransPipeline) SetPipeline(transPipe *TransPipeline) {
+func (p *SvrTransPipeline) SetPipeline(transPipe *SvrTransPipeline) {
 	// do nothing
 }
 
 // GracefulShutdown implements the GracefulShutdown interface.
-func (p *TransPipeline) GracefulShutdown(ctx context.Context) error {
-	if g, ok := p.netHdlr.(GracefulShutdown); ok {
+func (p *SvrTransPipeline) GracefulShutdown(ctx context.Context) error {
+	if g, ok := p.svrNetHdlr.(GracefulShutdown); ok {
 		return g.GracefulShutdown(ctx)
 	}
 	return nil

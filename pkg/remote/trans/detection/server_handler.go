@@ -23,6 +23,7 @@ import (
 	"net"
 
 	"github.com/cloudwego/kitex/pkg/endpoint"
+	"github.com/cloudwego/kitex/pkg/endpoint/sep"
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/remote"
 )
@@ -30,28 +31,35 @@ import (
 // DetectableServerTransHandler implements an additional method ProtocolMatch to help
 // DetectionHandler to judge which serverHandler should handle the request data.
 type DetectableServerTransHandler interface {
-	remote.ServerTransHandler
 	ProtocolMatch(ctx context.Context, conn net.Conn) (err error)
 }
 
 // NewSvrTransHandlerFactory detection factory construction. Each detectableHandlerFactory should return
 // a ServerTransHandler which implements DetectableServerTransHandler after called NewTransHandler.
 func NewSvrTransHandlerFactory(defaultHandlerFactory remote.ServerTransHandlerFactory,
-	detectableHandlerFactory ...remote.ServerTransHandlerFactory,
+	detectableHandlerFactory ...interface{}, // must be remote.ServerTransHandlerFactory or remote.ServerStreamTransHandlerFactory
 ) remote.ServerTransHandlerFactory {
-	return &svrTransHandlerFactory{
-		defaultHandlerFactory:    defaultHandlerFactory,
-		detectableHandlerFactory: detectableHandlerFactory,
+	svrTransFactory := &svrTransHandlerFactory{
+		defaultHandlerFactory: defaultHandlerFactory,
 	}
+	for _, factory := range detectableHandlerFactory {
+		if f, ok := factory.(remote.ServerTransHandlerFactory); ok {
+			svrTransFactory.detectableHandlerFactory = append(svrTransFactory.detectableHandlerFactory, f)
+			continue
+		}
+		if f, ok := factory.(remote.ServerStreamTransHandlerFactory); ok {
+			svrTransFactory.detectableStreamHandlerFactory = append(svrTransFactory.detectableStreamHandlerFactory, f)
+			continue
+		}
+		panic("KITEX: invalid detectableHandlerFactory: must implement remote.ServerTransHandlerFactory or remote.ServerStreamTransHandlerFactory")
+	}
+	return svrTransFactory
 }
 
 type svrTransHandlerFactory struct {
-	defaultHandlerFactory    remote.ServerTransHandlerFactory
-	detectableHandlerFactory []remote.ServerTransHandlerFactory
-}
-
-func (f *svrTransHandlerFactory) MuxEnabled() bool {
-	return false
+	defaultHandlerFactory          remote.ServerTransHandlerFactory
+	detectableHandlerFactory       []remote.ServerTransHandlerFactory
+	detectableStreamHandlerFactory []remote.ServerStreamTransHandlerFactory
 }
 
 func (f *svrTransHandlerFactory) NewTransHandler(opt *remote.ServerOption) (remote.ServerTransHandler, error) {
@@ -69,11 +77,28 @@ func (f *svrTransHandlerFactory) NewTransHandler(opt *remote.ServerOption) (remo
 		}
 		t.registered = append(t.registered, handler)
 	}
+	for i := range f.detectableStreamHandlerFactory {
+		h, err := f.detectableStreamHandlerFactory[i].NewTransHandler(opt)
+		if err != nil {
+			return nil, err
+		}
+		handler, ok := h.(DetectableServerTransHandler)
+		if !ok {
+			klog.Errorf("KITEX: failed to append detection server stream trans handler: %T", h)
+			continue
+		}
+		t.registered = append(t.registered, handler)
+	}
 	if t.defaultHandler, err = f.defaultHandlerFactory.NewTransHandler(opt); err != nil {
 		return nil, err
 	}
 	return t, nil
 }
+
+var (
+	_ remote.ServerTransHandler       = &svrTransHandler{}
+	_ remote.ServerStreamTransHandler = &svrTransHandler{}
+)
 
 type svrTransHandler struct {
 	defaultHandler remote.ServerTransHandler
@@ -81,21 +106,30 @@ type svrTransHandler struct {
 }
 
 func (t *svrTransHandler) Write(ctx context.Context, conn net.Conn, send remote.Message) (nctx context.Context, err error) {
-	return t.which(ctx).Write(ctx, conn, send)
+	if r := t.which(ctx); r != nil && r.handler != nil {
+		return r.handler.Write(ctx, conn, send)
+	}
+	return ctx, nil
 }
 
 func (t *svrTransHandler) Read(ctx context.Context, conn net.Conn, msg remote.Message) (nctx context.Context, err error) {
-	return t.which(ctx).Read(ctx, conn, msg)
+	if r := t.which(ctx); r != nil && r.handler != nil {
+		return r.handler.Read(ctx, conn, msg)
+	}
+	return ctx, nil
 }
 
 func (t *svrTransHandler) OnRead(ctx context.Context, conn net.Conn) (err error) {
 	// only need detect once when connection is reused
-	r := ctx.Value(handlerKey{}).(*handlerWrapper)
+	r := t.which(ctx)
 	if r.handler != nil {
-		return r.handler.OnRead(r.ctx, conn)
+		return r.handler.OnRead(ctx, conn)
+	}
+	if r.streamHandler != nil {
+		return r.streamHandler.OnRead(ctx, conn)
 	}
 	// compare preface one by one
-	var which remote.ServerTransHandler
+	var which DetectableServerTransHandler
 	for i := range t.registered {
 		if t.registered[i].ProtocolMatch(ctx, conn) == nil {
 			which = t.registered[i]
@@ -103,56 +137,92 @@ func (t *svrTransHandler) OnRead(ctx context.Context, conn net.Conn) (err error)
 		}
 	}
 	if which != nil {
-		ctx, err = which.OnActive(ctx, conn)
-		if err != nil {
-			return err
+		if sh, ok := which.(remote.ServerStreamTransHandler); ok {
+			r.ctx, r.streamHandler = ctx, sh
+			ctx, err = r.streamHandler.OnActive(ctx, conn)
+			if err != nil {
+				return err
+			}
+			return r.streamHandler.OnRead(ctx, conn)
+		} else {
+			h, _ := which.(remote.ServerTransHandler)
+			r.ctx, r.handler = ctx, h
+			ctx, err = r.handler.OnActive(ctx, conn)
+			if err != nil {
+				return err
+			}
+			return r.handler.OnRead(ctx, conn)
 		}
 	} else {
-		which = t.defaultHandler
+		r.ctx, r.handler = ctx, t.defaultHandler
+		return r.handler.OnRead(ctx, conn)
 	}
-	r.ctx, r.handler = ctx, which
-	return which.OnRead(ctx, conn)
 }
 
 func (t *svrTransHandler) OnInactive(ctx context.Context, conn net.Conn) {
 	// Should use the ctx returned by OnActive in r.ctx
-	if r, ok := ctx.Value(handlerKey{}).(*handlerWrapper); ok && r.ctx != nil {
+	r := t.which(ctx)
+	if r != nil && r.ctx != nil {
 		ctx = r.ctx
 	}
-	t.which(ctx).OnInactive(ctx, conn)
+	if r != nil && r.handler != nil {
+		r.handler.OnInactive(ctx, conn)
+		return
+	}
+	if r != nil && r.streamHandler != nil {
+		r.streamHandler.OnInactive(ctx, conn)
+		return
+	}
 }
 
 func (t *svrTransHandler) OnError(ctx context.Context, err error, conn net.Conn) {
-	t.which(ctx).OnError(ctx, err, conn)
+	r := t.which(ctx)
+	if r != nil && r.handler != nil {
+		r.handler.OnError(ctx, err, conn)
+		return
+	}
+	if r != nil && r.streamHandler != nil {
+		r.streamHandler.OnError(ctx, err, conn)
+		return
+	}
 }
 
 func (t *svrTransHandler) OnMessage(ctx context.Context, args, result remote.Message) (context.Context, error) {
-	return t.which(ctx).OnMessage(ctx, args, result)
-}
-
-func (t *svrTransHandler) which(ctx context.Context) remote.ServerTransHandler {
-	if r, ok := ctx.Value(handlerKey{}).(*handlerWrapper); ok && r.handler != nil {
-		return r.handler
+	r := t.which(ctx)
+	if r != nil && r.handler != nil {
+		return r.handler.OnMessage(ctx, args, result)
 	}
-	// use noop transHandler
-	return noopHandler
+	return ctx, nil
 }
 
-func (t *svrTransHandler) SetPipeline(pipeline *remote.TransPipeline) {
-	for i := range t.registered {
-		t.registered[i].SetPipeline(pipeline)
+func (t *svrTransHandler) which(ctx context.Context) *handlerWrapper {
+	r, _ := ctx.Value(handlerKey{}).(*handlerWrapper)
+	return r
+}
+
+func (t *svrTransHandler) SetPipeline(pipeline *remote.SvrTransPipeline) {
+	for _, h := range t.registered {
+		if hdl, ok := h.(remote.ServerTransHandler); ok {
+			hdl.SetPipeline(pipeline)
+		}
 	}
 	t.defaultHandler.SetPipeline(pipeline)
 }
 
 func (t *svrTransHandler) SetInvokeHandleFunc(inkHdlFunc endpoint.Endpoint) {
-	for i := range t.registered {
-		if s, ok := t.registered[i].(remote.InvokeHandleFuncSetter); ok {
-			s.SetInvokeHandleFunc(inkHdlFunc)
+	for _, h := range t.registered {
+		if hdl, ok := h.(remote.ServerTransHandler); ok {
+			hdl.SetInvokeHandleFunc(inkHdlFunc)
 		}
 	}
-	if t, ok := t.defaultHandler.(remote.InvokeHandleFuncSetter); ok {
-		t.SetInvokeHandleFunc(inkHdlFunc)
+	t.defaultHandler.SetInvokeHandleFunc(inkHdlFunc)
+}
+
+func (t *svrTransHandler) SetInvokeStreamFunc(inkStreamFunc sep.StreamEndpoint) {
+	for _, h := range t.registered {
+		if hdl, ok := h.(remote.ServerStreamTransHandler); ok {
+			hdl.SetInvokeStreamFunc(inkStreamFunc)
+		}
 	}
 }
 
@@ -183,6 +253,7 @@ func (t *svrTransHandler) GracefulShutdown(ctx context.Context) error {
 type handlerKey struct{}
 
 type handlerWrapper struct {
-	ctx     context.Context
-	handler remote.ServerTransHandler
+	ctx           context.Context
+	handler       remote.ServerTransHandler
+	streamHandler remote.ServerStreamTransHandler
 }

@@ -92,8 +92,11 @@ func (s *tInvoker) newInvokeHandler() (handler invoke.Handler, err error) {
 	if err != nil {
 		return nil, err
 	}
-	hdlr.(remote.InvokeHandleFuncSetter).SetInvokeHandleFunc(s.eps)
-	pl := remote.NewTransPipeline(hdlr)
+	hdlr.SetInvokeHandleFunc(s.eps)
+	if setter, ok := hdlr.(remote.ServerStreamTransHandler); ok {
+		setter.SetInvokeStreamFunc(s.seps)
+	}
+	pl := remote.NewSvrTransPipeline(hdlr)
 	hdlr.SetPipeline(pl)
 	for _, ib := range opt.Inbounds {
 		pl.AddInboundHandler(ib)

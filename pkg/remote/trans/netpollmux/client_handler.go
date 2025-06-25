@@ -62,9 +62,8 @@ func newCliTransHandler(opt *remote.ClientOption) (*cliTransHandler, error) {
 var _ remote.ClientTransHandler = &cliTransHandler{}
 
 type cliTransHandler struct {
-	opt       *remote.ClientOption
-	codec     remote.Codec
-	transPipe *remote.TransPipeline
+	opt   *remote.ClientOption
+	codec remote.Codec
 }
 
 // Write implements the remote.ClientTransHandler interface.
@@ -165,11 +164,6 @@ func (t *cliTransHandler) OnMessage(ctx context.Context, args, result remote.Mes
 	return ctx, nil
 }
 
-// OnInactive implements the remote.ClientTransHandler interface.
-func (t *cliTransHandler) OnInactive(ctx context.Context, conn net.Conn) {
-	// ineffective now and do nothing
-}
-
 // OnError implements the remote.ClientTransHandler interface.
 func (t *cliTransHandler) OnError(ctx context.Context, err error, conn net.Conn) {
 	if pe, ok := err.(*kerrors.DetailedError); ok {
@@ -177,11 +171,6 @@ func (t *cliTransHandler) OnError(ctx context.Context, err error, conn net.Conn)
 	} else {
 		klog.CtxErrorf(ctx, "KITEX: send request error, remote=%s, error=%s", conn.RemoteAddr(), err.Error())
 	}
-}
-
-// SetPipeline implements the remote.ClientTransHandler interface.
-func (t *cliTransHandler) SetPipeline(p *remote.TransPipeline) {
-	t.transPipe = p
 }
 
 type asyncCallback struct {

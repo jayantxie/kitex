@@ -62,7 +62,7 @@ type StreamOption = internal_server.StreamOption
 
 type StreamOptions = internal_server.StreamOptions
 
-type TTHeaderStreamingOption = remote.TTHeaderStreamingOption
+type TTHeaderStreamingOption = remote.ServerTTHeaderStreamingOption
 
 // WithSuite adds an option suite for server.
 func WithSuite(suite Suite) Option {

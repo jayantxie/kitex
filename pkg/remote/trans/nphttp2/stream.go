@@ -19,8 +19,8 @@ package nphttp2
 import (
 	"context"
 	"errors"
-	"net"
 
+	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/remote"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/metadata"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
@@ -151,7 +151,7 @@ type clientStream struct {
 	rpcInfo rpcinfo.RPCInfo
 	svcInfo *serviceinfo.ServiceInfo
 	conn    *clientConn
-	handler remote.TransReadWriter
+	handler *cliTransHandler
 	// for grpc compatibility
 	grpcStream *grpcClientStream
 }
@@ -160,21 +160,6 @@ var _ streaming.GRPCStreamGetter = (*clientStream)(nil)
 
 func (s *clientStream) GetGRPCStream() streaming.Stream {
 	return s.grpcStream
-}
-
-// NewClientStream ...
-func NewClientStream(ctx context.Context, svcInfo *serviceinfo.ServiceInfo, conn net.Conn, handler remote.TransReadWriter) streaming.ClientStream {
-	sx := &clientStream{
-		ctx:     ctx,
-		rpcInfo: rpcinfo.GetRPCInfo(ctx),
-		svcInfo: svcInfo,
-		handler: handler,
-	}
-	sx.conn, _ = conn.(*clientConn)
-	sx.grpcStream = &grpcClientStream{
-		sx: sx,
-	}
-	return sx
 }
 
 func (s *grpcClientStream) Context() context.Context {
@@ -241,7 +226,19 @@ func (s *clientStream) RecvMsg(ctx context.Context, m interface{}) error {
 	msg.SetProtocolInfo(remote.NewProtocolInfo(ri.Config().TransportProtocol(), payloadCodec))
 	defer msg.Recycle()
 
-	_, err = s.handler.Read(s.ctx, s.conn, msg)
+	buf := newBuffer(s.conn)
+	defer buf.Release(err)
+
+	// set recv grpc compressor at client to decode the pack from server
+	remote.SetRecvCompressor(ri, s.conn.GetRecvCompress())
+	err = s.handler.codec.Decode(ctx, msg, buf)
+	if bizStatusErr, isBizErr := kerrors.FromBizStatusError(err); isBizErr {
+		if setter, ok := ri.Invocation().(rpcinfo.InvocationSetter); ok {
+			setter.SetBizStatusErr(bizStatusErr)
+			return nil
+		}
+	}
+	ctx = receiveHeaderAndTrailer(ctx, s.conn)
 	return err
 }
 
@@ -258,8 +255,13 @@ func (s *clientStream) SendMsg(ctx context.Context, m interface{}) error {
 	msg.SetProtocolInfo(remote.NewProtocolInfo(ri.Config().TransportProtocol(), payloadCodec))
 	defer msg.Recycle()
 
-	_, err = s.handler.Write(s.ctx, s.conn, msg)
-	return err
+	buf := newBuffer(s.conn)
+	defer buf.Release(err)
+
+	if err = s.handler.codec.Encode(ctx, msg, buf); err != nil {
+		return err
+	}
+	return buf.Flush()
 }
 
 func (s *clientStream) CloseSend(ctx context.Context) error {
@@ -268,6 +270,13 @@ func (s *clientStream) CloseSend(ctx context.Context) error {
 
 func (s *clientStream) Context() context.Context {
 	return s.ctx
+}
+
+func (s *clientStream) DoFinish(error) {
+	if s.handler.cp.connOpts.ShortConn {
+		s.conn.tr.GracefulClose()
+	}
+	return
 }
 
 func (s *clientStream) getPayloadCodecFromContentType() (serviceinfo.PayloadCodec, error) {

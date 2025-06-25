@@ -503,26 +503,26 @@ const mockUint32Size uint32 = 0
 
 func TestWithGRPCConnPoolSize(t *testing.T) {
 	opts := client.NewOptions([]client.Option{WithGRPCConnPoolSize(mockUint32Size)})
-	test.Assert(t, opts.GRPCConnPoolSize == mockUint32Size, opts.GRPCConnPoolSize)
+	test.Assert(t, opts.RemoteOpt.GRPCConnPoolSize == mockUint32Size, opts.RemoteOpt.GRPCConnPoolSize)
 }
 
 func TestWithGRPCInitialWindowSize(t *testing.T) {
 	opts := client.NewOptions([]client.Option{WithGRPCInitialWindowSize(mockUint32Size)})
-	test.Assert(t, opts.GRPCConnectOpts.InitialWindowSize == mockUint32Size, opts.GRPCConnectOpts.InitialWindowSize)
+	test.Assert(t, opts.RemoteOpt.GRPCConnectOpts.InitialWindowSize == mockUint32Size, opts.RemoteOpt.GRPCConnectOpts.InitialWindowSize)
 }
 
 func TestWithGRPCInitialConnWindowSize(t *testing.T) {
 	opts := client.NewOptions([]client.Option{WithGRPCInitialConnWindowSize(mockUint32Size)})
-	test.Assert(t, opts.GRPCConnectOpts.InitialConnWindowSize == mockUint32Size,
-		opts.GRPCConnectOpts.InitialConnWindowSize)
+	test.Assert(t, opts.RemoteOpt.GRPCConnectOpts.InitialConnWindowSize == mockUint32Size,
+		opts.RemoteOpt.GRPCConnectOpts.InitialConnWindowSize)
 }
 
 func TestWithGRPCMaxHeaderListSize(t *testing.T) {
 	opts := client.NewOptions([]client.Option{WithGRPCMaxHeaderListSize(mockUint32Size)})
 	test.Assert(t,
-		opts.GRPCConnectOpts.MaxHeaderListSize != nil &&
-			*opts.GRPCConnectOpts.MaxHeaderListSize == mockUint32Size,
-		opts.GRPCConnectOpts.MaxHeaderListSize)
+		opts.RemoteOpt.GRPCConnectOpts.MaxHeaderListSize != nil &&
+			*opts.RemoteOpt.GRPCConnectOpts.MaxHeaderListSize == mockUint32Size,
+		opts.RemoteOpt.GRPCConnectOpts.MaxHeaderListSize)
 }
 
 func TestWithGRPCKeepaliveParams(t *testing.T) {
@@ -534,11 +534,11 @@ func TestWithGRPCKeepaliveParams(t *testing.T) {
 				PermitWithoutStream: true,
 			}),
 		})
-	test.Assert(t, opts.GRPCConnectOpts.KeepaliveParams.Time == grpc.KeepaliveMinPingTime,
-		opts.GRPCConnectOpts.KeepaliveParams.Time)
-	test.Assert(t, opts.GRPCConnectOpts.KeepaliveParams.Timeout == 20*time.Second,
-		opts.GRPCConnectOpts.KeepaliveParams.Timeout)
-	test.Assert(t, opts.GRPCConnectOpts.KeepaliveParams.PermitWithoutStream)
+	test.Assert(t, opts.RemoteOpt.GRPCConnectOpts.KeepaliveParams.Time == grpc.KeepaliveMinPingTime,
+		opts.RemoteOpt.GRPCConnectOpts.KeepaliveParams.Time)
+	test.Assert(t, opts.RemoteOpt.GRPCConnectOpts.KeepaliveParams.Timeout == 20*time.Second,
+		opts.RemoteOpt.GRPCConnectOpts.KeepaliveParams.Timeout)
+	test.Assert(t, opts.RemoteOpt.GRPCConnectOpts.KeepaliveParams.PermitWithoutStream)
 }
 
 func TestWithHTTPConnection(t *testing.T) {
@@ -746,7 +746,7 @@ func TestWithXDSSuite(t *testing.T) {
 func TestWithGRPCTLSConfig(t *testing.T) {
 	cfg := &tls.Config{}
 	opts := client.NewOptions([]client.Option{WithGRPCTLSConfig(cfg)})
-	test.Assert(t, opts.GRPCConnectOpts != nil)
+	test.Assert(t, opts.RemoteOpt.GRPCConnectOpts != nil)
 }
 
 func TestTailOption(t *testing.T) {
