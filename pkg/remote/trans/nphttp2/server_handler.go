@@ -32,7 +32,7 @@ import (
 	"github.com/cloudwego/netpoll"
 
 	"github.com/cloudwego/kitex/pkg/consts"
-	"github.com/cloudwego/kitex/pkg/endpoint"
+	"github.com/cloudwego/kitex/pkg/endpoint/sep"
 	"github.com/cloudwego/kitex/pkg/gofunc"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/klog"
@@ -52,11 +52,11 @@ import (
 type svrTransHandlerFactory struct{}
 
 // NewSvrTransHandlerFactory ...
-func NewSvrTransHandlerFactory() remote.ServerTransHandlerFactory {
+func NewSvrTransHandlerFactory() remote.ServerStreamTransHandlerFactory {
 	return &svrTransHandlerFactory{}
 }
 
-func (f *svrTransHandlerFactory) NewTransHandler(opt *remote.ServerOption) (remote.ServerTransHandler, error) {
+func (f *svrTransHandlerFactory) NewTransHandler(opt *remote.ServerOption) (remote.ServerStreamTransHandler, error) {
 	return newSvrTransHandler(opt)
 }
 
@@ -69,13 +69,13 @@ func newSvrTransHandler(opt *remote.ServerOption) (*svrTransHandler, error) {
 	}, nil
 }
 
-var _ remote.ServerTransHandler = &svrTransHandler{}
+var _ remote.ServerStreamTransHandler = &svrTransHandler{}
 
 type svrTransHandler struct {
-	opt         *remote.ServerOption
-	svcSearcher remote.ServiceSearcher
-	inkHdlFunc  endpoint.Endpoint
-	codec       remote.Codec
+	opt              *remote.ServerOption
+	svcSearcher      remote.ServiceSearcher
+	invokeStreamFunc sep.StreamEndpoint
+	codec            remote.Codec
 
 	mu sync.Mutex
 	// maintain all active server transports
@@ -254,17 +254,8 @@ func (t *svrTransHandler) handleFunc(s *grpcTransport.Stream, svrTrans *SvrTrans
 		}
 	} else {
 		ink.SetStreamingMode(methodInfo.StreamingMode())
-		if streaming.UnaryCompatibleMiddleware(methodInfo.StreamingMode(), t.opt.CompatibleMiddlewareForUnary) {
-			// making streaming unary APIs capable of using the same server middleware as non-streaming APIs
-			// note: rawStream skips recv/send middleware for unary API requests to avoid confusion
-			err = invokeStreamUnaryHandler(rCtx, rawStream, methodInfo, t.inkHdlFunc, ri)
-		} else {
-			args := &streaming.Args{
-				ServerStream: rawStream,
-				Stream:       rawStream.grpcStream,
-			}
-			err = t.inkHdlFunc(rCtx, args, nil)
-		}
+		ink.SetMethodInfo(methodInfo)
+		err = t.invokeStreamFunc(rCtx, rawStream)
 	}
 
 	if err != nil {
@@ -286,26 +277,6 @@ func (t *svrTransHandler) handleFunc(s *grpcTransport.Stream, svrTrans *SvrTrans
 	tr.WriteStatus(s, status.New(codes.OK, ""))
 }
 
-// invokeStreamUnaryHandler allows unary APIs over HTTP2 to use the same server middleware as non-streaming APIs.
-// For thrift unary APIs over HTTP2, it's enabled by default.
-// For grpc(protobuf) unary APIs, it's disabled by default to keep backward compatibility.
-func invokeStreamUnaryHandler(ctx context.Context, st streaming.ServerStream, mi serviceinfo.MethodInfo,
-	handler endpoint.Endpoint, ri rpcinfo.RPCInfo,
-) (err error) {
-	realArgs, realResp := mi.NewArgs(), mi.NewResult()
-	if err = st.RecvMsg(ctx, realArgs); err != nil {
-		return err
-	}
-	if err = handler(ctx, realArgs, realResp); err != nil {
-		return err
-	}
-	if ri != nil && ri.Invocation().BizStatusErr() != nil {
-		// BizError: do not send the message
-		return nil
-	}
-	return st.SendMsg(ctx, realResp)
-}
-
 func getPayloadCodecFromContentType(ct string) serviceinfo.PayloadCodec {
 	switch ct {
 	case contentSubTypeThrift:
@@ -313,11 +284,6 @@ func getPayloadCodecFromContentType(ct string) serviceinfo.PayloadCodec {
 	default:
 		return serviceinfo.Protobuf
 	}
-}
-
-// msg 是解码后的实例，如 Arg 或 Result, 触发上层处理，用于异步 和 服务端处理
-func (t *svrTransHandler) OnMessage(ctx context.Context, args, result remote.Message) (context.Context, error) {
-	panic("unimplemented")
 }
 
 type svrTransKey int
@@ -389,11 +355,8 @@ func (t *svrTransHandler) OnError(ctx context.Context, err error, conn net.Conn)
 	}
 }
 
-func (t *svrTransHandler) SetInvokeHandleFunc(inkHdlFunc endpoint.Endpoint) {
-	t.inkHdlFunc = inkHdlFunc
-}
-
-func (t *svrTransHandler) SetPipeline(p *remote.TransPipeline) {
+func (t *svrTransHandler) SetInvokeStreamFunc(invokeStreamFunc sep.StreamEndpoint) {
+	t.invokeStreamFunc = invokeStreamFunc
 }
 
 func (t *svrTransHandler) GracefulShutdown(ctx context.Context) error {

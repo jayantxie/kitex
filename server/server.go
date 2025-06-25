@@ -47,6 +47,7 @@ import (
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
 	"github.com/cloudwego/kitex/pkg/stats"
 	"github.com/cloudwego/kitex/pkg/streaming"
+	"github.com/cloudwego/kitex/transport"
 )
 
 // Server is an abstraction of an RPC server. It accepts connections and dispatches them to the service
@@ -65,6 +66,7 @@ type server struct {
 
 	// actual rpc service implement of biz
 	eps     endpoint.Endpoint
+	seps    sep.StreamEndpoint
 	svr     remotesvr.Server
 	stopped sync.Once
 	isInit  bool
@@ -156,7 +158,6 @@ func (s *server) buildMiddlewares(ctx context.Context) []endpoint.Middleware {
 
 	// 3. universal middleware
 	var mws []endpoint.Middleware
-	mws = append(mws, s.wrapStreamMiddleware())
 	// register server timeout middleware
 	// prepend for adding timeout to the context for all middlewares and the handler
 	if s.opt.EnableContextTimeout {
@@ -178,9 +179,54 @@ func (s *server) buildMiddlewares(ctx context.Context) []endpoint.Middleware {
 	return mws
 }
 
+func (s *server) streamEndpoint(handler endpoint.Endpoint) sep.StreamEndpoint {
+	// recvEP and sendEP are the endpoints for the new stream interface,
+	// and grpcRecvEP and grpcSendEP are the endpoints for the old grpc stream interface,
+	// the latter two are going to be removed in the future.
+	sendEP := s.opt.StreamOptions.BuildSendChain()
+	recvEP := s.opt.StreamOptions.BuildRecvChain()
+	grpcSendEP := s.opt.Streaming.BuildSendInvokeChain()
+	grpcRecvEP := s.opt.Streaming.BuildRecvInvokeChain()
+	return func(ctx context.Context, st streaming.ServerStream) (err error) {
+		ri := rpcinfo.GetRPCInfo(ctx)
+		invokeUnary := true
+		if ri.Config().TransportProtocol()&transport.GRPC != 0 {
+			// for grpc(protobuf) streaming, it's disabled by default, enable with server.WithCompatibleMiddlewareForUnary
+			invokeUnary = s.opt.RemoteOpt.CompatibleMiddlewareForUnary
+		}
+		mode := ri.Invocation().StreamingMode()
+		mi := ri.Invocation().MethodInfo()
+		if (mode == serviceinfo.StreamingUnary || mode == serviceinfo.StreamingNone) && invokeUnary {
+			// making streaming unary APIs capable of using the same server middleware as non-streaming APIs
+			// note: rawStream skips recv/send middleware for unary API requests to avoid confusion
+			realArgs, realResp := mi.NewArgs(), mi.NewResult()
+			if err = st.RecvMsg(ctx, realArgs); err != nil {
+				return
+			}
+			if err = handler(ctx, realArgs, realResp); err != nil {
+				return
+			}
+			if ri.Invocation().BizStatusErr() != nil {
+				// BizError: do not send the message
+				return
+			}
+			err = st.SendMsg(ctx, realResp)
+		} else {
+			nst := newStream(ctx, st, sendEP, recvEP, s.opt.StreamOptions.EventHandler, grpcSendEP, grpcRecvEP)
+			args := &streaming.Args{
+				ServerStream: nst,
+				Stream:       nst.GetGRPCStream(),
+			}
+			err = handler(ctx, args, nil)
+		}
+		return
+	}
+}
+
 func (s *server) buildInvokeChain(ctx context.Context) {
 	mws := s.buildMiddlewares(ctx)
 	s.eps = endpoint.Chain(mws...)(s.unaryOrStreamEndpoint(ctx))
+	s.seps = s.streamEndpoint(s.eps)
 }
 
 // RegisterService should not be called by users directly.
@@ -603,10 +649,11 @@ func (s *server) newSvrTransHandler() (handler remote.ServerTransHandler, err er
 	if err != nil {
 		return nil, err
 	}
-	if setter, ok := transHdlr.(remote.InvokeHandleFuncSetter); ok {
-		setter.SetInvokeHandleFunc(s.eps)
+	transHdlr.SetInvokeHandleFunc(s.eps)
+	if setter, ok := transHdlr.(remote.ServerStreamTransHandler); ok {
+		setter.SetInvokeStreamFunc(s.seps)
 	}
-	transPl := remote.NewTransPipeline(transHdlr)
+	transPl := remote.NewSvrTransPipeline(transHdlr)
 
 	for _, ib := range s.opt.RemoteOpt.Inbounds {
 		transPl.AddInboundHandler(ib)

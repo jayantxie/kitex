@@ -18,94 +18,73 @@ package nphttp2
 
 import (
 	"context"
-	"net"
 
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/remote"
 	"github.com/cloudwego/kitex/pkg/remote/codec/grpc"
-	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/metadata"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
+	"github.com/cloudwego/kitex/pkg/streaming"
 )
 
-type cliTransHandlerFactory struct{}
+type cliTransHandlerFactory struct {
+	remoteService string // remote service name
+}
 
 // NewCliTransHandlerFactory ...
-func NewCliTransHandlerFactory() remote.ClientTransHandlerFactory {
-	return &cliTransHandlerFactory{}
+func NewCliTransHandlerFactory(remoteService string) remote.ClientStreamTransHandlerFactory {
+	return &cliTransHandlerFactory{remoteService: remoteService}
 }
 
-func (f *cliTransHandlerFactory) NewTransHandler(opt *remote.ClientOption) (remote.ClientTransHandler, error) {
-	return newCliTransHandler(opt)
-}
-
-func newCliTransHandler(opt *remote.ClientOption) (*cliTransHandler, error) {
+func (f *cliTransHandlerFactory) NewTransHandler(opt *remote.ClientOption) (remote.ClientStreamTransHandler, error) {
+	size := opt.GRPCConnPoolSize
+	if size == 0 {
+		size = poolSize()
+	}
 	return &cliTransHandler{
-		opt:   opt,
-		codec: grpc.NewGRPCCodec(grpc.WithThriftCodec(opt.PayloadCodec)),
+		opt:    opt,
+		codec:  grpc.NewGRPCCodec(grpc.WithThriftCodec(opt.PayloadCodec)),
+		cp:     NewConnPool(f.remoteService, size, *opt.GRPCConnectOpts),
+		dialer: opt.Dialer,
 	}, nil
 }
 
-var _ remote.ClientTransHandler = &cliTransHandler{}
+var _ remote.ClientStreamTransHandler = &cliTransHandler{}
 
 type cliTransHandler struct {
-	opt   *remote.ClientOption
-	codec remote.Codec
+	opt    *remote.ClientOption
+	codec  remote.Codec
+	cp     *connPool
+	dialer remote.Dialer
 }
 
-func (h *cliTransHandler) Write(ctx context.Context, conn net.Conn, msg remote.Message) (nctx context.Context, err error) {
-	buf := newBuffer(conn.(*clientConn))
-	defer buf.Release(err)
-
-	if err = h.codec.Encode(ctx, msg, buf); err != nil {
-		return ctx, err
-	}
-	return ctx, buf.Flush()
-}
-
-func (h *cliTransHandler) Read(ctx context.Context, conn net.Conn, msg remote.Message) (nctx context.Context, err error) {
-	buf := newBuffer(conn.(GRPCConn))
-	defer buf.Release(err)
-
-	// set recv grpc compressor at client to decode the pack from server
-	ri := msg.RPCInfo()
-	remote.SetRecvCompressor(ri, conn.(hasGetRecvCompress).GetRecvCompress())
-	err = h.codec.Decode(ctx, msg, buf)
-	if bizStatusErr, isBizErr := kerrors.FromBizStatusError(err); isBizErr {
-		if setter, ok := ri.Invocation().(rpcinfo.InvocationSetter); ok {
-			setter.SetBizStatusErr(bizStatusErr)
-			return ctx, nil
+func (h *cliTransHandler) NewStream(ctx context.Context, ri rpcinfo.RPCInfo) (streaming.ClientStream, error) {
+	var err error
+	for _, shdlr := range h.opt.StreamingMetaHandlers {
+		ctx, err = shdlr.OnConnectStream(ctx)
+		if err != nil {
+			return nil, err
 		}
 	}
-	ctx = receiveHeaderAndTrailer(ctx, conn)
-	return ctx, err
-}
-
-func (h *cliTransHandler) OnRead(ctx context.Context, conn net.Conn) (context.Context, error) {
-	// do nothing
-	hdr, err := conn.(*clientConn).Header()
-	if err != nil {
-		return nil, err
+	addr := ri.To().Address()
+	if addr == nil {
+		return nil, kerrors.ErrNoDestAddress
 	}
-
-	return metadata.NewIncomingContext(ctx, hdr), nil
-}
-
-func (h *cliTransHandler) OnConnect(ctx context.Context) (context.Context, error) {
-	return ctx, nil
-}
-
-func (h *cliTransHandler) OnInactive(ctx context.Context, conn net.Conn) {
-	panic("unimplemented")
-}
-
-func (h *cliTransHandler) OnError(ctx context.Context, err error, conn net.Conn) {
-	panic("unimplemented")
-}
-
-func (h *cliTransHandler) OnMessage(ctx context.Context, args, result remote.Message) (context.Context, error) {
-	// do nothing
-	return ctx, nil
-}
-
-func (h *cliTransHandler) SetPipeline(pipeline *remote.TransPipeline) {
+	var opt remote.ConnOption
+	opt.Dialer = h.dialer
+	opt.ConnectTimeout = ri.Config().ConnectTimeout()
+	conn, err := h.cp.Get(ctx, addr.Network(), addr.String(), opt)
+	if err != nil {
+		return nil, kerrors.ErrGetConnection.WithCause(err)
+	}
+	sx := &clientStream{
+		ctx:     ctx,
+		rpcInfo: rpcinfo.GetRPCInfo(ctx),
+		svcInfo: h.opt.SvcInfo,
+		handler: h,
+	}
+	sx.conn, _ = conn.(*clientConn)
+	sx.grpcStream = &grpcClientStream{
+		sx: sx,
+	}
+	return sx, nil
 }

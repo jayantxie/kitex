@@ -29,17 +29,26 @@ import (
 	"github.com/cloudwego/kitex/pkg/streaming"
 )
 
-var _ remote.ClientStreamFactory = (*clientTransHandler)(nil)
+type clientTransHandlerFactory struct {
+}
 
 // NewCliTransHandlerFactory return a client trans handler factory.
-func NewCliTransHandlerFactory(opts ...ClientHandlerOption) remote.ClientStreamFactory {
-	cp := new(clientTransHandler)
-	cp.transPool = newMuxConnTransPool(DefaultMuxConnConfig)
-	for _, opt := range opts {
-		opt(cp)
-	}
-	return cp
+func NewCliTransHandlerFactory() remote.ClientStreamTransHandlerFactory {
+	return &clientTransHandlerFactory{}
 }
+
+func (*clientTransHandlerFactory) NewTransHandler(opts *remote.ClientOption) (remote.ClientStreamTransHandler, error) {
+	h := &clientTransHandler{}
+	h.transPool = newMuxConnTransPool(DefaultMuxConnConfig)
+	for _, opt := range opts.TTHeaderStreamingOptions.TransportOptions {
+		if o, ok := opt.(ClientHandlerOption); ok {
+			o(h)
+		}
+	}
+	return h, nil
+}
+
+var _ remote.ClientStreamTransHandler = (*clientTransHandler)(nil)
 
 type clientTransHandler struct {
 	transPool     transPool
