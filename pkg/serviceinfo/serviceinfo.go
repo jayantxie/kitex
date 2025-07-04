@@ -91,9 +91,10 @@ func (i *ServiceInfo) MethodInfo(name string) MethodInfo {
 	}
 	if _, ok := i.Extra["generic"]; ok {
 		if i.GenericMethod != nil {
+			// for generic client
 			return i.GenericMethod(name)
 		}
-		// TODO: modify when server side supports grpc generic
+
 		return i.Methods[GenericMethod]
 	}
 	return i.Methods[name]

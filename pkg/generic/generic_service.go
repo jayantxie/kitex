@@ -20,13 +20,21 @@ import (
 	"context"
 
 	"github.com/cloudwego/kitex/internal/generic"
+	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
+	"github.com/cloudwego/kitex/pkg/streaming"
 )
 
 // Service generic service interface
 type Service interface {
 	// GenericCall handle the generic call
 	GenericCall(ctx context.Context, method string, request interface{}) (response interface{}, err error)
+}
+
+type StreamingService interface {
+	ClientStreaming(ctx context.Context, method string, stream ClientStreamingServer) (err error)
+	ServerStreaming(ctx context.Context, method string, request interface{}, stream ServerStreamingServer) (err error)
+	BidiStreaming(ctx context.Context, method string, stream BidiStreamingServer) (err error)
 }
 
 // ServiceInfoWithGeneric create a generic ServiceInfo
@@ -63,66 +71,34 @@ func getMethodInfo(g Generic, serviceName string) (methods map[string]serviceinf
 		}
 	} else {
 		svcName = serviceName
+		methodInfoGetter := func(handler serviceinfo.MethodHandler, streamMode serviceinfo.StreamingMode) serviceinfo.MethodInfo {
+			return serviceinfo.NewMethodInfo(
+				handler,
+				func() interface{} {
+					args := &Args{}
+					args.SetCodec(g.MessageReaderWriter())
+					return args
+				},
+				func() interface{} {
+					result := &Result{}
+					result.SetCodec(g.MessageReaderWriter())
+					return result
+				},
+				false,
+				serviceinfo.WithStreamingMode(streamMode),
+			)
+		}
 		methods = map[string]serviceinfo.MethodInfo{
-			serviceinfo.GenericClientStreamingMethod: serviceinfo.NewMethodInfo(
-				nil,
-				func() interface{} {
-					args := &Args{}
-					args.SetCodec(g.MessageReaderWriter())
-					return args
-				},
-				func() interface{} {
-					result := &Result{}
-					result.SetCodec(g.MessageReaderWriter())
-					return result
-				},
-				false,
-				serviceinfo.WithStreamingMode(serviceinfo.StreamingClient),
-			),
-			serviceinfo.GenericServerStreamingMethod: serviceinfo.NewMethodInfo(
-				nil,
-				func() interface{} {
-					args := &Args{}
-					args.SetCodec(g.MessageReaderWriter())
-					return args
-				},
-				func() interface{} {
-					result := &Result{}
-					result.SetCodec(g.MessageReaderWriter())
-					return result
-				},
-				false,
-				serviceinfo.WithStreamingMode(serviceinfo.StreamingServer),
-			),
-			serviceinfo.GenericBidirectionalStreamingMethod: serviceinfo.NewMethodInfo(
-				nil,
-				func() interface{} {
-					args := &Args{}
-					args.SetCodec(g.MessageReaderWriter())
-					return args
-				},
-				func() interface{} {
-					result := &Result{}
-					result.SetCodec(g.MessageReaderWriter())
-					return result
-				},
-				false,
-				serviceinfo.WithStreamingMode(serviceinfo.StreamingBidirectional),
-			),
-			serviceinfo.GenericMethod: serviceinfo.NewMethodInfo(
-				callHandler,
-				func() interface{} {
-					args := &Args{}
-					args.SetCodec(g.MessageReaderWriter())
-					return args
-				},
-				func() interface{} {
-					result := &Result{}
-					result.SetCodec(g.MessageReaderWriter())
-					return result
-				},
-				false,
-			),
+			serviceinfo.GenericClientStreamingMethod: methodInfoGetter(clientStreamingHandlerGetter(
+				// note: construct method info twice to make the method handler obtain the args/results newer.
+				methodInfoGetter(nil, serviceinfo.StreamingClient)), serviceinfo.StreamingClient),
+			serviceinfo.GenericServerStreamingMethod: methodInfoGetter(serverStreamingHandlerGetter(
+				// note: construct method info twice to make the method handler obtain the args/results newer.
+				methodInfoGetter(nil, serviceinfo.StreamingServer)), serviceinfo.StreamingServer),
+			serviceinfo.GenericBidirectionalStreamingMethod: methodInfoGetter(bidiStreamingHandlerGetter(
+				// note: construct method info twice to make the method handler obtain the args/results newer.
+				methodInfoGetter(nil, serviceinfo.StreamingBidirectional)), serviceinfo.StreamingBidirectional),
+			serviceinfo.GenericMethod: methodInfoGetter(callHandler, serviceinfo.StreamingNone),
 		}
 	}
 	return
@@ -168,6 +144,55 @@ func callHandler(ctx context.Context, handler, arg, result interface{}) error {
 	}
 	realResult.Success = success
 	return nil
+}
+
+func clientStreamingHandlerGetter(mi serviceinfo.MethodInfo) serviceinfo.MethodHandler {
+	return func(ctx context.Context, handler, arg, result interface{}) error {
+		st, err := streaming.GetServerStreamFromArg(arg)
+		if err != nil {
+			return err
+		}
+		gst := &clientStreamingServer{
+			methodInfo:   mi,
+			ServerStream: st,
+		}
+		ri := rpcinfo.GetRPCInfo(ctx)
+		return handler.(StreamingService).ClientStreaming(ctx, ri.Invocation().MethodName(), gst)
+	}
+}
+
+func serverStreamingHandlerGetter(mi serviceinfo.MethodInfo) serviceinfo.MethodHandler {
+	return func(ctx context.Context, handler, arg, result interface{}) error {
+		st, err := streaming.GetServerStreamFromArg(arg)
+		if err != nil {
+			return err
+		}
+		gst := &serverStreamingServer{
+			methodInfo:   mi,
+			ServerStream: st,
+		}
+		args := mi.NewArgs().(*Args)
+		if err = st.RecvMsg(ctx, args); err != nil {
+			return err
+		}
+		ri := rpcinfo.GetRPCInfo(ctx)
+		return handler.(StreamingService).ServerStreaming(ctx, ri.Invocation().MethodName(), args.Request, gst)
+	}
+}
+
+func bidiStreamingHandlerGetter(mi serviceinfo.MethodInfo) serviceinfo.MethodHandler {
+	return func(ctx context.Context, handler, arg, result interface{}) error {
+		st, err := streaming.GetServerStreamFromArg(arg)
+		if err != nil {
+			return err
+		}
+		gst := &bidiStreamingServer{
+			methodInfo:   mi,
+			ServerStream: st,
+		}
+		ri := rpcinfo.GetRPCInfo(ctx)
+		return handler.(StreamingService).BidiStreaming(ctx, ri.Invocation().MethodName(), gst)
+	}
 }
 
 func newGenericServiceCallArgs() interface{} {
