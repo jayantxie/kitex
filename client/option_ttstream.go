@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/kitex/internal/client"
+	"github.com/cloudwego/kitex/pkg/remote"
 	"github.com/cloudwego/kitex/pkg/remote/trans/ttstream"
 	"github.com/cloudwego/kitex/pkg/utils"
 )
@@ -29,7 +30,7 @@ func WithTTHeaderStreamingOptions(opts ...TTHeaderStreamingOption) Option {
 	return Option{F: func(o *client.Options, di *utils.Slice) {
 		var udi utils.Slice
 		for _, opt := range opts {
-			opt.F(&o.TTHeaderStreamingOptions, &udi)
+			opt.F(&o.RemoteOpt.TTHeaderStreamingOptions, &udi)
 		}
 		di.Push(map[string]interface{}{
 			"WithTTHeaderStreamingOptions": udi,
@@ -38,10 +39,12 @@ func WithTTHeaderStreamingOptions(opts ...TTHeaderStreamingOption) Option {
 }
 
 // WithTTHeaderStreamingTransportOptions add ttheader streaming transport options for client.
-func WithTTHeaderStreamingTransportOptions(opt ...ttstream.ClientHandlerOption) TTHeaderStreamingOption {
-	return TTHeaderStreamingOption{F: func(o *client.TTHeaderStreamingOptions, di *utils.Slice) {
-		di.Push(fmt.Sprintf("WithTTHeaderStreamingHandlerOption(%T)", opt))
+func WithTTHeaderStreamingTransportOptions(opts ...ttstream.ClientHandlerOption) TTHeaderStreamingOption {
+	return TTHeaderStreamingOption{F: func(o *remote.ClientTTHeaderStreamingOptions, di *utils.Slice) {
+		di.Push(fmt.Sprintf("WithTTHeaderStreamingHandlerOption(%T)", opts))
 
-		o.TransportOptions = append(o.TransportOptions, opt...)
+		for _, opt := range opts {
+			o.TransportOptions = append(o.TransportOptions, opt)
+		}
 	}}
 }

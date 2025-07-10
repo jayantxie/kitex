@@ -24,6 +24,7 @@ import (
 	"github.com/cloudwego/kitex/pkg/remote"
 	"github.com/cloudwego/kitex/pkg/remote/codec"
 	"github.com/cloudwego/kitex/pkg/remote/trans/netpoll"
+	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/grpc"
 )
 
 func newClientRemoteOption() *remote.ClientOption {
@@ -31,5 +32,7 @@ func newClientRemoteOption() *remote.ClientOption {
 		CliHandlerFactory: netpoll.NewCliTransHandlerFactory(),
 		Dialer:            netpoll.NewDialer(),
 		Codec:             codec.NewDefaultCodec(),
+
+		GRPCConnectOpts: new(grpc.ConnectOptions),
 	}
 }

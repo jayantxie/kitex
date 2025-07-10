@@ -60,9 +60,9 @@ type StreamOption = client.StreamOption
 
 type StreamOptions = client.StreamOptions
 
-type TTHeaderStreamingOption = client.TTHeaderStreamingOption
+type TTHeaderStreamingOption = remote.ClientTTHeaderStreamingOption
 
-type TTHeaderStreamingOptions = client.TTHeaderStreamingOptions
+type TTHeaderStreamingOptions = remote.ClientTTHeaderStreamingOptions
 
 // A Suite is a collection of Options. It is useful to assemble multiple associated
 // Options as a single one to keep the order or presence in a desired manner.
@@ -473,7 +473,7 @@ func WithCircuitBreaker(s *circuitbreak.CBSuite) Option {
 func WithGRPCConnPoolSize(s uint32) Option {
 	return Option{F: func(o *client.Options, di *utils.Slice) {
 		di.Push(fmt.Sprintf("WithGRPCConnPoolSize(%d)", s))
-		o.GRPCConnPoolSize = s
+		o.RemoteOpt.GRPCConnPoolSize = s
 	}}
 }
 
@@ -488,7 +488,7 @@ func WithGRPCConnPoolSize(s uint32) Option {
 func WithGRPCWriteBufferSize(s uint32) Option {
 	return Option{F: func(o *client.Options, di *utils.Slice) {
 		di.Push(fmt.Sprintf("WithGRPCWriteBufferSize(%d)", s))
-		o.GRPCConnectOpts.WriteBufferSize = s
+		o.RemoteOpt.GRPCConnectOpts.WriteBufferSize = s
 	}}
 }
 
@@ -501,7 +501,7 @@ func WithGRPCWriteBufferSize(s uint32) Option {
 func WithGRPCReadBufferSize(s uint32) Option {
 	return Option{F: func(o *client.Options, di *utils.Slice) {
 		di.Push(fmt.Sprintf("WithGRPCReadBufferSize(%d)", s))
-		o.GRPCConnectOpts.ReadBufferSize = s
+		o.RemoteOpt.GRPCConnectOpts.ReadBufferSize = s
 	}}
 }
 
@@ -511,7 +511,7 @@ func WithGRPCReadBufferSize(s uint32) Option {
 func WithGRPCInitialWindowSize(s uint32) Option {
 	return Option{F: func(o *client.Options, di *utils.Slice) {
 		di.Push(fmt.Sprintf("WithGRPCInitialWindowSize(%d)", s))
-		o.GRPCConnectOpts.InitialWindowSize = s
+		o.RemoteOpt.GRPCConnectOpts.InitialWindowSize = s
 	}}
 }
 
@@ -521,7 +521,7 @@ func WithGRPCInitialWindowSize(s uint32) Option {
 func WithGRPCInitialConnWindowSize(s uint32) Option {
 	return Option{F: func(o *client.Options, di *utils.Slice) {
 		di.Push(fmt.Sprintf("WithGRPCInitialConnWindowSize(%d)", s))
-		o.GRPCConnectOpts.InitialConnWindowSize = s
+		o.RemoteOpt.GRPCConnectOpts.InitialConnWindowSize = s
 	}}
 }
 
@@ -531,7 +531,7 @@ func WithGRPCInitialConnWindowSize(s uint32) Option {
 func WithGRPCMaxHeaderListSize(s uint32) Option {
 	return Option{F: func(o *client.Options, di *utils.Slice) {
 		di.Push(fmt.Sprintf("WithGRPCMaxHeaderListSize(%d)", s))
-		o.GRPCConnectOpts.MaxHeaderListSize = &s
+		o.RemoteOpt.GRPCConnectOpts.MaxHeaderListSize = &s
 	}}
 }
 
@@ -543,7 +543,7 @@ func WithGRPCKeepaliveParams(kp grpc.ClientKeepalive) Option {
 	}
 	return Option{F: func(o *client.Options, di *utils.Slice) {
 		di.Push(fmt.Sprintf("WithGRPCKeepaliveParams(%+v)", kp))
-		o.GRPCConnectOpts.KeepaliveParams = kp
+		o.RemoteOpt.GRPCConnectOpts.KeepaliveParams = kp
 	}}
 }
 

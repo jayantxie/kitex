@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync/atomic"
@@ -27,7 +28,6 @@ import (
 	"github.com/cloudwego/kitex/pkg/endpoint/cep"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/remote"
-	"github.com/cloudwego/kitex/pkg/remote/remotecli"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/metadata"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
@@ -128,18 +128,7 @@ func (kc *kClient) StreamX(ctx context.Context, method string) (streaming.Client
 	return cs, err
 }
 
-func (kc *kClient) invokeStreamingEndpoint() (endpoint.Endpoint, error) {
-	var handler remote.ClientTransHandler
-	var err error
-	if kc.opt.RemoteOpt.GRPCStreamingCliHandlerFactory != nil {
-		handler, err = kc.opt.RemoteOpt.GRPCStreamingCliHandlerFactory.NewTransHandler(kc.opt.RemoteOpt)
-	} else {
-		handler, err = kc.opt.RemoteOpt.CliHandlerFactory.NewTransHandler(kc.opt.RemoteOpt)
-	}
-	if err != nil {
-		return nil, err
-	}
-
+func (kc *kClient) invokeStreamingEndpoint(streamHandler remote.ClientStreamTransHandler) (endpoint.Endpoint, error) {
 	// recvEP and sendEP are the endpoints for the new stream interface,
 	// and grpcRecvEP and grpcSendEP are the endpoints for the old grpc stream interface,
 	// the latter two are going to be removed in the future.
@@ -149,14 +138,17 @@ func (kc *kClient) invokeStreamingEndpoint() (endpoint.Endpoint, error) {
 	grpcSendEP := kc.opt.Streaming.BuildSendInvokeChain()
 
 	return func(ctx context.Context, req, resp interface{}) (err error) {
-		// req and resp as &streaming.Stream
-		ri := rpcinfo.GetRPCInfo(ctx)
-		st, scm, err := remotecli.NewStream(ctx, ri, handler, kc.opt.RemoteOpt)
-		if err != nil {
+		if streamHandler == nil {
+			err = errors.New("no streaming transport protocol configured")
 			return
 		}
-
-		clientStream := newStream(ctx, st, scm, kc, ri, kc.getStreamingMode(ri), sendEP, recvEP, kc.opt.StreamOptions.EventHandler, grpcSendEP, grpcRecvEP)
+		// req and resp as &streaming.Stream
+		ri := rpcinfo.GetRPCInfo(ctx)
+		var st streaming.ClientStream
+		if st, err = streamHandler.NewStream(ctx, ri); err != nil {
+			return
+		}
+		clientStream := newStream(ctx, st, kc, ri, kc.getStreamingMode(ri), sendEP, recvEP, kc.opt.StreamOptions.EventHandler, grpcSendEP, grpcRecvEP)
 		rresp := resp.(*streaming.Result)
 		rresp.ClientStream = clientStream
 		rresp.Stream = clientStream.GetGRPCStream()
@@ -176,7 +168,6 @@ type stream struct {
 	streaming.ClientStream
 	grpcStream   *grpcStream
 	ctx          context.Context
-	scm          *remotecli.StreamConnManager
 	kc           *kClient
 	ri           rpcinfo.RPCInfo
 	eventHandler internal_stream.StreamEventHandler
@@ -194,13 +185,12 @@ var (
 	_ streaming.WithDoFinish     = (*grpcStream)(nil)
 )
 
-func newStream(ctx context.Context, s streaming.ClientStream, scm *remotecli.StreamConnManager, kc *kClient, ri rpcinfo.RPCInfo, mode serviceinfo.StreamingMode,
+func newStream(ctx context.Context, s streaming.ClientStream, kc *kClient, ri rpcinfo.RPCInfo, mode serviceinfo.StreamingMode,
 	sendEP cep.StreamSendEndpoint, recvEP cep.StreamRecvEndpoint, eventHandler internal_stream.StreamEventHandler, grpcSendEP endpoint.SendEndpoint, grpcRecvEP endpoint.RecvEndpoint,
 ) *stream {
 	st := &stream{
 		ClientStream:  s,
 		ctx:           ctx,
-		scm:           scm,
 		kc:            kc,
 		ri:            ri,
 		streamingMode: mode,
@@ -287,8 +277,8 @@ func (s *stream) DoFinish(err error) {
 		// only rpc errors are reported
 		err = nil
 	}
-	if s.scm != nil {
-		s.scm.ReleaseConn(err, s.ri)
+	if f, ok := s.ClientStream.(streaming.WithDoFinish); ok {
+		f.DoFinish(err)
 	}
 	s.kc.opt.TracerCtl.DoFinish(s.ctx, s.ri, err)
 }

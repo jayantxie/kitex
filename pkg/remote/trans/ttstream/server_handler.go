@@ -31,7 +31,7 @@ import (
 	"github.com/cloudwego/gopkg/protocol/ttheader"
 	"github.com/cloudwego/netpoll"
 
-	"github.com/cloudwego/kitex/pkg/endpoint"
+	"github.com/cloudwego/kitex/pkg/endpoint/sep"
 	"github.com/cloudwego/kitex/pkg/gofunc"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/klog"
@@ -60,11 +60,11 @@ Other interface is used by trans pipeline
 type svrTransHandlerFactory struct{}
 
 // NewSvrTransHandlerFactory ...
-func NewSvrTransHandlerFactory() remote.ServerTransHandlerFactory {
+func NewSvrTransHandlerFactory() remote.ServerStreamTransHandlerFactory {
 	return &svrTransHandlerFactory{}
 }
 
-func (f *svrTransHandlerFactory) NewTransHandler(opts *remote.ServerOption) (remote.ServerTransHandler, error) {
+func (f *svrTransHandlerFactory) NewTransHandler(opts *remote.ServerOption) (remote.ServerStreamTransHandler, error) {
 	sp := &svrTransHandler{
 		opt: opts,
 	}
@@ -77,18 +77,18 @@ func (f *svrTransHandlerFactory) NewTransHandler(opts *remote.ServerOption) (rem
 }
 
 var (
-	_                   remote.ServerTransHandler = &svrTransHandler{}
-	errProtocolNotMatch                           = errors.New("protocol not match")
+	_                   remote.ServerStreamTransHandler = &svrTransHandler{}
+	errProtocolNotMatch                                 = errors.New("protocol not match")
 )
 
 type svrTransHandler struct {
-	opt           *remote.ServerOption
-	inkHdlFunc    endpoint.Endpoint
-	headerHandler HeaderFrameReadHandler
+	opt              *remote.ServerOption
+	invokeStreamFunc sep.StreamEndpoint
+	headerHandler    HeaderFrameReadHandler
 }
 
-func (t *svrTransHandler) SetInvokeHandleFunc(inkHdlFunc endpoint.Endpoint) {
-	t.inkHdlFunc = inkHdlFunc
+func (t *svrTransHandler) SetInvokeStreamFunc(invokeStreamFunc sep.StreamEndpoint) {
+	t.invokeStreamFunc = invokeStreamFunc
 }
 
 func (t *svrTransHandler) ProtocolMatch(ctx context.Context, conn net.Conn) (err error) {
@@ -187,6 +187,7 @@ func (t *svrTransHandler) OnStream(ctx context.Context, conn net.Conn, st *strea
 	}
 	ink.SetServiceName(sinfo.ServiceName)
 	ink.SetMethodName(st.Method())
+	ink.SetMethodInfo(minfo)
 	ink.SetStreamingMode(minfo.StreamingMode())
 	if mutableTo := rpcinfo.AsMutableEndpointInfo(ri.To()); mutableTo != nil {
 		_ = mutableTo.SetMethod(st.Method())
@@ -221,10 +222,7 @@ func (t *svrTransHandler) OnStream(ctx context.Context, conn net.Conn, st *strea
 		}
 		t.finishTracer(ctx, ri, err, panicErr)
 	}()
-	args := &streaming.Args{
-		ServerStream: ss,
-	}
-	if err = t.inkHdlFunc(ctx, args, nil); err != nil {
+	if err = t.invokeStreamFunc(ctx, ss); err != nil {
 		// treat err thrown by invoking handler as the final err, ignore the err returned by OnStreamFinish
 		_, _ = t.OnStreamFinish(ctx, ss, err)
 		return
@@ -307,9 +305,6 @@ func (t *svrTransHandler) OnStreamFinish(ctx context.Context, ss streaming.Serve
 
 func (t *svrTransHandler) OnMessage(ctx context.Context, args, result remote.Message) (context.Context, error) {
 	return ctx, nil
-}
-
-func (t *svrTransHandler) SetPipeline(pipeline *remote.TransPipeline) {
 }
 
 func (t *svrTransHandler) startTracer(ctx context.Context, ri rpcinfo.RPCInfo) context.Context {

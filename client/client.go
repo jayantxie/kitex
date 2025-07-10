@@ -473,7 +473,11 @@ func (kc *kClient) richRemoteOption() {
 }
 
 func (kc *kClient) buildInvokeChain(mw middleware) error {
-	innerHandlerEp, err := kc.invokeHandleEndpoint()
+	tw, err := newTransHandlerWrapper(kc.opt)
+	if err != nil {
+		return err
+	}
+	innerHandlerEp, err := kc.invokeHandleEndpoint(tw)
 	if err != nil {
 		return err
 	}
@@ -483,7 +487,7 @@ func (kc *kClient) buildInvokeChain(mw middleware) error {
 		return eps(ctx, req, resp)
 	})
 
-	innerStreamingEp, err := kc.invokeStreamingEndpoint()
+	innerStreamingEp, err := kc.invokeStreamingEndpoint(tw.streamHandler)
 	if err != nil {
 		return err
 	}
@@ -499,12 +503,19 @@ func (kc *kClient) buildInvokeChain(mw middleware) error {
 	return nil
 }
 
-func (kc *kClient) invokeHandleEndpoint() (endpoint.Endpoint, error) {
-	transPipl, err := newCliTransHandler(kc.opt.RemoteOpt)
-	if err != nil {
-		return nil, err
-	}
+func (kc *kClient) invokeHandleEndpoint(tw transHandlerWrapper) (endpoint.Endpoint, error) {
 	return func(ctx context.Context, req, resp interface{}) (err error) {
+		ri := rpcinfo.GetRPCInfo(ctx)
+		if tw.unaryStreamHandler != nil {
+			// handle unary call based on streaming
+			var st streaming.ClientStream
+			st, err = tw.unaryStreamHandler.NewStream(ctx, ri)
+			if err != nil {
+				return
+			}
+			return kc.unaryStreamingCall(st, req, resp)
+		}
+		// handler unary call
 		var sendMsg remote.Message
 		var recvMsg remote.Message
 		defer func() {
@@ -513,10 +524,10 @@ func (kc *kClient) invokeHandleEndpoint() (endpoint.Endpoint, error) {
 			// No race now, it is ok to recycle. Or recvMsg recycle depend on recv err
 			remote.RecycleMessage(recvMsg)
 		}()
-		ri := rpcinfo.GetRPCInfo(ctx)
+
 		methodName := ri.Invocation().MethodName()
 
-		cli, err := remotecli.NewClient(ctx, ri, transPipl, kc.opt.RemoteOpt)
+		cli, err := remotecli.NewClient(ctx, ri, tw.unaryHandler, kc.opt.RemoteOpt)
 		if err != nil {
 			return
 		}
@@ -549,6 +560,23 @@ func (kc *kClient) invokeHandleEndpoint() (endpoint.Endpoint, error) {
 	}, nil
 }
 
+func (kc *kClient) unaryStreamingCall(st streaming.ClientStream, req, resp interface{}) (err error) {
+	ctx := st.Context()
+	if err = st.SendMsg(ctx, req); err != nil {
+		return
+	}
+	if err = st.CloseSend(ctx); err != nil {
+		return
+	}
+	if err = st.RecvMsg(ctx, resp); err != nil {
+		return
+	}
+	if f, ok := st.(streaming.WithDoFinish); ok {
+		f.DoFinish(nil)
+	}
+	return
+}
+
 // Close is not concurrency safe.
 func (kc *kClient) Close() error {
 	defer func() {
@@ -577,12 +605,51 @@ func (kc *kClient) Close() error {
 	return nil
 }
 
+type transHandlerWrapper struct {
+	// unary call
+	unaryHandler remote.ClientTransHandler
+	// unary call based on streaming
+	unaryStreamHandler remote.ClientStreamTransHandler
+	// stream call
+	streamHandler remote.ClientStreamTransHandler
+}
+
+func newTransHandlerWrapper(opt *client.Options) (tw transHandlerWrapper, err error) {
+	if opt.Configs.TransportProtocol()&transport.GRPC == transport.GRPC {
+		// configure grpc
+		gRPCHandler, err := opt.RemoteOpt.GRPCHandlerFactory.NewTransHandler(opt.RemoteOpt)
+		if err != nil {
+			return tw, err
+		}
+		tw.unaryStreamHandler, tw.streamHandler = gRPCHandler, gRPCHandler
+		return
+	}
+	if opt.Configs.TransportProtocol()&transport.GRPCStreaming == transport.GRPCStreaming {
+		// configure grpc streaming
+		gRPCHandler, err := opt.RemoteOpt.GRPCHandlerFactory.NewTransHandler(opt.RemoteOpt)
+		if err != nil {
+			return tw, err
+		}
+		tw.streamHandler = gRPCHandler
+	} else if opt.Configs.TransportProtocol()&transport.TTHeaderStreaming == transport.TTHeaderStreaming {
+		// configure ttheader streaming
+		ttstreamHandler, err := opt.RemoteOpt.TTHeaderStreamingCliHandlerFactory.NewTransHandler(opt.RemoteOpt)
+		if err != nil {
+			return tw, err
+		}
+		tw.streamHandler = ttstreamHandler
+	}
+	// configure default
+	tw.unaryHandler, err = newCliTransHandler(opt.RemoteOpt)
+	return
+}
+
 func newCliTransHandler(opt *remote.ClientOption) (remote.ClientTransHandler, error) {
 	handler, err := opt.CliHandlerFactory.NewTransHandler(opt)
 	if err != nil {
 		return nil, err
 	}
-	transPl := remote.NewTransPipeline(handler)
+	transPl := remote.NewCliTransPipeline(handler)
 	for _, ib := range opt.Inbounds {
 		transPl.AddInboundHandler(ib)
 	}
@@ -803,7 +870,9 @@ func initRPCInfo(ctx context.Context, method string, opt *client.Options, svcInf
 	)
 
 	if mi != nil {
-		ri.Invocation().(rpcinfo.InvocationSetter).SetStreamingMode(mi.StreamingMode())
+		setter := ri.Invocation().(rpcinfo.InvocationSetter)
+		setter.SetStreamingMode(mi.StreamingMode())
+		setter.SetMethodInfo(mi)
 	}
 	if streamCall {
 		cfg.SetInteractionMode(rpcinfo.Streaming)

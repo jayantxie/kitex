@@ -21,60 +21,80 @@ import (
 	"net"
 
 	"github.com/cloudwego/kitex/pkg/endpoint"
+	"github.com/cloudwego/kitex/pkg/endpoint/sep"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/streaming"
 )
 
-// ClientTransHandlerFactory to new TransHandler for client
+// ClientTransHandlerFactory to new ClientTransHandler for client
 type ClientTransHandlerFactory interface {
 	NewTransHandler(opt *ClientOption) (ClientTransHandler, error)
 }
 
-// ServerTransHandlerFactory to new TransHandler for server
+// ClientStreamTransHandlerFactory to new ClientStreamTransHandler for client
+type ClientStreamTransHandlerFactory interface {
+	NewTransHandler(opt *ClientOption) (ClientStreamTransHandler, error)
+}
+
+// ServerTransHandlerFactory to new ServerTransHandler for server
 type ServerTransHandlerFactory interface {
 	NewTransHandler(opt *ServerOption) (ServerTransHandler, error)
 }
 
-// TransReadWriter .
+// ServerStreamTransHandlerFactory to new ServerStreamTransHandler for server
+type ServerStreamTransHandlerFactory interface {
+	NewTransHandler(opt *ServerOption) (ServerStreamTransHandler, error)
+}
+
+// TransReadWriter defines the interface for unary client/server trans handler,
+// Write writes a message to the connection, and Read reads a message from the connection.
 type TransReadWriter interface {
 	Write(ctx context.Context, conn net.Conn, send Message) (nctx context.Context, err error)
 	Read(ctx context.Context, conn net.Conn, msg Message) (nctx context.Context, err error)
 }
 
-// TransHandler is similar to the handler role in netty
+// ClientTransHandler provides Read/Write methods to handle ping pong messages.
+// It serves protocols that only support ping pong, such as ttheader framed.
 // Transport can be refactored to support pipeline, and then is able to support other extensions at conn level.
-type TransHandler interface {
+type ClientTransHandler interface {
 	TransReadWriter
-	OnInactive(ctx context.Context, conn net.Conn)
 	OnError(ctx context.Context, err error, conn net.Conn)
 	OnMessage(ctx context.Context, args, result Message) (context.Context, error)
-	SetPipeline(pipeline *TransPipeline)
 }
 
-// ClientTransHandler is just TransHandler.
-type ClientTransHandler interface {
-	TransHandler
+// ClientStreamTransHandler provides NewStream method to create a new client stream.
+type ClientStreamTransHandler interface {
+	NewStream(ctx context.Context, ri rpcinfo.RPCInfo) (streaming.ClientStream, error)
 }
 
-// ServerTransHandler have some new functions.
-type ServerTransHandler interface {
-	TransHandler
+// TransServerEventHandler provides network event callbacks for TransServer,
+// and it's similar to the handler role in netty.
+type TransServerEventHandler interface {
 	OnActive(ctx context.Context, conn net.Conn) (context.Context, error)
+	OnInactive(ctx context.Context, conn net.Conn)
+	OnError(ctx context.Context, err error, conn net.Conn)
 	OnRead(ctx context.Context, conn net.Conn) error
 }
 
-// InvokeHandleFuncSetter is used to set invoke handle func.
-type InvokeHandleFuncSetter interface {
+// ServerTransHandler provides Read/Write methods to handle ping pong messages.
+// It serves protocols that only support ping pong, such as ttheader framed.
+// Transport can be refactored to support pipeline, and then is able to support other extensions at conn level.
+type ServerTransHandler interface {
+	TransReadWriter
+	TransServerEventHandler
+	OnMessage(ctx context.Context, args, result Message) (context.Context, error)
+	SetPipeline(pipeline *SvrTransPipeline)
 	SetInvokeHandleFunc(inkHdlFunc endpoint.Endpoint)
+}
+
+// ServerStreamTransHandler removes the interface definition of ServerTransHandler for unary messages,
+// and is more suitable for streaming protocols.
+type ServerStreamTransHandler interface {
+	TransServerEventHandler
+	SetInvokeStreamFunc(inkStFunc sep.StreamEndpoint)
 }
 
 // GracefulShutdown supports closing connections in a graceful manner.
 type GracefulShutdown interface {
 	GracefulShutdown(ctx context.Context) error
-}
-
-// ClientStreamFactory is used to create a stream for client.
-// NOTICE: might be updated without compatibility guarantee in the future.
-type ClientStreamFactory interface {
-	NewStream(ctx context.Context, ri rpcinfo.RPCInfo) (streaming.ClientStream, error)
 }
