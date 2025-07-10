@@ -47,10 +47,9 @@ func newHTTPCliTransHandler(opt *remote.ClientOption, ext trans.Extension) (remo
 }
 
 type httpCliTransHandler struct {
-	opt       *remote.ClientOption
-	codec     remote.Codec
-	transPipe *remote.TransPipeline
-	ext       trans.Extension
+	opt   *remote.ClientOption
+	codec remote.Codec
+	ext   trans.Extension
 }
 
 // Write implements the remote.ClientTransHandler interface.
@@ -130,12 +129,6 @@ func (t *httpCliTransHandler) OnMessage(ctx context.Context, args, result remote
 	return ctx, nil
 }
 
-// OnInactive implements the remote.ClientTransHandler interface.
-// This is called when connection is closed.
-func (t *httpCliTransHandler) OnInactive(ctx context.Context, conn net.Conn) {
-	// ineffective now and do nothing
-}
-
 // OnError implements the remote.ClientTransHandler interface.
 // This is called when panic happens.
 func (t *httpCliTransHandler) OnError(ctx context.Context, err error, conn net.Conn) {
@@ -143,11 +136,6 @@ func (t *httpCliTransHandler) OnError(ctx context.Context, err error, conn net.C
 	if errors.As(err, &pe) {
 		klog.CtxErrorf(ctx, "KITEX: send http request error, remote=%s, error=%s\nstack=%s", conn.RemoteAddr(), err.Error(), pe.Stack())
 	}
-}
-
-// SetPipeline implements the remote.ClientTransHandler interface.
-func (t *httpCliTransHandler) SetPipeline(p *remote.TransPipeline) {
-	t.transPipe = p
 }
 
 func addMetaInfo(msg remote.Message, h http.Header) error {

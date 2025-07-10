@@ -26,26 +26,6 @@ import (
 	"github.com/cloudwego/kitex/pkg/streaming"
 )
 
-func (s *server) wrapStreamMiddleware() endpoint.Middleware {
-	return func(next endpoint.Endpoint) endpoint.Endpoint {
-		// recvEP and sendEP are the endpoints for the new stream interface,
-		// and grpcRecvEP and grpcSendEP are the endpoints for the old grpc stream interface,
-		// the latter two are going to be removed in the future.
-		sendEP := s.opt.StreamOptions.BuildSendChain()
-		recvEP := s.opt.StreamOptions.BuildRecvChain()
-		grpcSendEP := s.opt.Streaming.BuildSendInvokeChain()
-		grpcRecvEP := s.opt.Streaming.BuildRecvInvokeChain()
-		return func(ctx context.Context, req, resp interface{}) (err error) {
-			if st, ok := req.(*streaming.Args); ok {
-				nst := newStream(ctx, st.ServerStream, sendEP, recvEP, s.opt.StreamOptions.EventHandler, grpcSendEP, grpcRecvEP)
-				st.ServerStream = nst
-				st.Stream = nst.GetGRPCStream()
-			}
-			return next(ctx, req, resp)
-		}
-	}
-}
-
 func newStream(ctx context.Context, s streaming.ServerStream, sendEP sep.StreamSendEndpoint, recvEP sep.StreamRecvEndpoint,
 	eventHandler internal_stream.StreamEventHandler, grpcSendEP endpoint.SendEndpoint, grpcRecvEP endpoint.RecvEndpoint,
 ) *stream {

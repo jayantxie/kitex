@@ -55,7 +55,7 @@ type svrTransHandler struct {
 	targetSvcInfo      *serviceinfo.ServiceInfo
 	inkHdlFunc         endpoint.Endpoint
 	codec              remote.Codec
-	transPipe          *remote.TransPipeline
+	transPipe          *remote.SvrTransPipeline
 	ext                Extension
 	inGracefulShutdown uint32
 }
@@ -283,7 +283,7 @@ func (t *svrTransHandler) SetInvokeHandleFunc(inkHdlFunc endpoint.Endpoint) {
 }
 
 // SetPipeline implements the remote.ServerTransHandler interface.
-func (t *svrTransHandler) SetPipeline(p *remote.TransPipeline) {
+func (t *svrTransHandler) SetPipeline(p *remote.SvrTransPipeline) {
 	t.transPipe = p
 }
 

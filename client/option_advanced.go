@@ -242,6 +242,6 @@ func WithGRPCTLSConfig(tlsConfig *tls.Config) Option {
 			panic("invalid TLS config: nil")
 		}
 		di.Push("WithGRPCTLSConfig")
-		o.GRPCConnectOpts.TLSConfig = grpc.TLSConfig(tlsConfig)
+		o.RemoteOpt.GRPCConnectOpts.TLSConfig = grpc.TLSConfig(tlsConfig)
 	}}
 }
