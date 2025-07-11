@@ -199,7 +199,7 @@ func TestRecv(t *testing.T) {
 
 	svcInfo := mocks.ServiceInfo()
 	var resp interface{}
-	msg := remote.NewMessage(resp, svcInfo, ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(resp, ri, remote.Call, remote.Client)
 
 	hdlr := mocksremote.NewMockClientTransHandler(ctrl)
 	hdlr.EXPECT().Read(gomock.Any(), gomock.Any(), msg).Return(ctx, nil).MinTimes(1)

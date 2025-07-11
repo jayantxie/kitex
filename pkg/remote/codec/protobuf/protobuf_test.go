@@ -225,7 +225,7 @@ func initMockReqArgsSendMsg() remote.Message {
 func initSendMsg(tp transport.Protocol, m any) remote.Message {
 	ink := rpcinfo.NewInvocation("", "mock")
 	ri := rpcinfo.NewRPCInfo(nil, nil, ink, nil, nil)
-	msg := remote.NewMessage(m, svcInfo, ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(m, ri, remote.Call, remote.Client)
 	msg.SetProtocolInfo(remote.NewProtocolInfo(tp, svcInfo.PayloadCodec))
 	return msg
 }
@@ -238,19 +238,19 @@ func initMockReqArgsRecvMsg() remote.Message {
 func initRecvMsg(m any) remote.Message {
 	ink := rpcinfo.NewInvocation("", "mock")
 	ri := rpcinfo.NewRPCInfo(nil, nil, ink, nil, nil)
-	msg := remote.NewMessage(m, svcInfo, ri, remote.Call, remote.Server)
+	msg := remote.NewMessage(m, ri, remote.Call, remote.Server)
 	return msg
 }
 
 func initServerErrorMsg(tp transport.Protocol, ri rpcinfo.RPCInfo, transErr *remote.TransError) remote.Message {
-	errMsg := remote.NewMessage(transErr, svcInfo, ri, remote.Exception, remote.Server)
+	errMsg := remote.NewMessage(transErr, ri, remote.Exception, remote.Server)
 	errMsg.SetProtocolInfo(remote.NewProtocolInfo(tp, svcInfo.PayloadCodec))
 	return errMsg
 }
 
 func initClientRecvMsg(ri rpcinfo.RPCInfo) remote.Message {
 	var resp interface{}
-	clientRecvMsg := remote.NewMessage(resp, svcInfo, ri, remote.Reply, remote.Client)
+	clientRecvMsg := remote.NewMessage(resp, ri, remote.Reply, remote.Client)
 	return clientRecvMsg
 }
 

@@ -45,7 +45,7 @@ func initNoTagSendMsg(tp transport.Protocol) remote.Message {
 	var _args MockNoTagArgs
 	ink := rpcinfo.NewInvocation("", "mock")
 	ri := rpcinfo.NewRPCInfo(nil, nil, ink, nil, nil)
-	msg := remote.NewMessage(&_args, svcInfo, ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(&_args, ri, remote.Call, remote.Client)
 	msg.SetProtocolInfo(remote.NewProtocolInfo(tp, svcInfo.PayloadCodec))
 	return msg
 }
@@ -63,7 +63,7 @@ func initFrugalTagSendMsg(tp transport.Protocol) remote.Message {
 	}
 	ink := rpcinfo.NewInvocation("", "mock")
 	ri := rpcinfo.NewRPCInfo(nil, nil, ink, nil, nil)
-	msg := remote.NewMessage(&_args, svcInfo, ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(&_args, ri, remote.Call, remote.Client)
 	msg.SetProtocolInfo(remote.NewProtocolInfo(tp, svcInfo.PayloadCodec))
 	return msg
 }
@@ -72,7 +72,7 @@ func initFrugalTagRecvMsg() remote.Message {
 	var _args MockFrugalTagArgs
 	ink := rpcinfo.NewInvocation("", "mock")
 	ri := rpcinfo.NewRPCInfo(nil, nil, ink, nil, rpcinfo.NewRPCStats())
-	msg := remote.NewMessage(&_args, svcInfo, ri, remote.Call, remote.Server)
+	msg := remote.NewMessage(&_args, ri, remote.Call, remote.Server)
 	return msg
 }
 

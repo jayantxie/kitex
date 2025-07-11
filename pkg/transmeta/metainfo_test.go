@@ -36,7 +36,7 @@ import (
 func TestClientReadMetainfo(t *testing.T) {
 	ctx := context.Background()
 	ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation("", ""), nil, rpcinfo.NewRPCStats())
-	msg := remote.NewMessage(nil, mocks.ServiceInfo(), ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(nil, ri, remote.Call, remote.Client)
 	hd := map[string]string{
 		"hello": "world",
 	}
@@ -63,7 +63,7 @@ func TestClientWriteMetainfo(t *testing.T) {
 	ctx := context.Background()
 	ctx = metainfo.WithValue(ctx, "tk", "tv")
 	ctx = metainfo.WithPersistentValue(ctx, "pk", "pv")
-	msg := remote.NewMessage(nil, mocks.ServiceInfo(), ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(nil, ri, remote.Call, remote.Client)
 
 	msg.SetProtocolInfo(remote.NewProtocolInfo(transport.PurePayload, serviceinfo.Thrift))
 	ctx, err := MetainfoClientHandler.WriteMeta(ctx, msg)
@@ -87,7 +87,7 @@ func TestClientWriteMetainfo(t *testing.T) {
 func TestServerReadMetainfo(t *testing.T) {
 	ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation("", ""), nil, rpcinfo.NewRPCStats())
 	ctx0 := context.Background()
-	msg := remote.NewMessage(nil, mocks.ServiceInfo(), ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(nil, ri, remote.Call, remote.Client)
 
 	hd := map[string]string{
 		"hello":                          "world",
@@ -122,7 +122,7 @@ func TestServerReadMetainfo(t *testing.T) {
 
 func TestServerWriteMetainfo(t *testing.T) {
 	ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation("", ""), nil, rpcinfo.NewRPCStats())
-	msg := remote.NewMessage(nil, mocks.ServiceInfo(), ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(nil, ri, remote.Call, remote.Client)
 
 	ctx := context.Background()
 	ctx = metainfo.WithBackwardValuesToSend(ctx)
