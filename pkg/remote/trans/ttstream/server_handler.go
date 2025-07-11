@@ -187,6 +187,7 @@ func (t *svrTransHandler) OnStream(ctx context.Context, conn net.Conn, st *strea
 	}
 	ink.SetServiceName(sinfo.ServiceName)
 	ink.SetMethodName(st.Method())
+	ink.SetMethodInfo(minfo)
 	ink.SetStreamingMode(minfo.StreamingMode())
 	if mutableTo := rpcinfo.AsMutableEndpointInfo(ri.To()); mutableTo != nil {
 		_ = mutableTo.SetMethod(st.Method())

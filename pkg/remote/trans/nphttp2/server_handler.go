@@ -226,6 +226,7 @@ func (t *svrTransHandler) handleFunc(s *grpcTransport.Stream, svrTrans *SvrTrans
 	svcInfo := t.svcSearcher.SearchService(serviceName, methodName, true)
 	var methodInfo serviceinfo.MethodInfo
 	if svcInfo != nil {
+		ink.SetServiceInfo(svcInfo)
 		methodInfo = svcInfo.MethodInfo(methodName)
 	}
 
@@ -253,6 +254,7 @@ func (t *svrTransHandler) handleFunc(s *grpcTransport.Stream, svrTrans *SvrTrans
 			}
 		}
 	} else {
+		ink.SetMethodInfo(methodInfo)
 		ink.SetStreamingMode(methodInfo.StreamingMode())
 		if streaming.UnaryCompatibleMiddleware(methodInfo.StreamingMode(), t.opt.CompatibleMiddlewareForUnary) {
 			// making streaming unary APIs capable of using the same server middleware as non-streaming APIs

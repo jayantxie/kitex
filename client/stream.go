@@ -165,7 +165,7 @@ func (kc *kClient) invokeStreamingEndpoint() (endpoint.Endpoint, error) {
 }
 
 func (kc *kClient) getStreamingMode(ri rpcinfo.RPCInfo) serviceinfo.StreamingMode {
-	methodInfo := kc.svcInfo.MethodInfo(ri.Invocation().MethodName())
+	methodInfo := ri.Invocation().MethodInfo()
 	if methodInfo == nil {
 		return serviceinfo.StreamingNone
 	}

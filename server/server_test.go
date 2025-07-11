@@ -785,7 +785,7 @@ func testInvokeHandlerWithSession(t *testing.T, fail bool, ad string) {
 				svcSearcher.addService(svcInfo, mocks.MyServiceHandler(), &RegisterOptions{})
 				recvMsg := remote.NewMessageWithNewer(svcInfo, svcSearcher, ri, remote.Call, remote.Server)
 				recvMsg.NewData(callMethod)
-				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), svcInfo, ri, remote.Reply, remote.Server)
+				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), ri, remote.Reply, remote.Server)
 
 				// inject kvs here
 				ctx = metainfo.WithPersistentValue(ctx, "a", "b")
@@ -874,7 +874,7 @@ func TestInvokeHandlerExec(t *testing.T) {
 				svcSearcher.addService(svcInfo, mocks.MyServiceHandler(), &RegisterOptions{})
 				recvMsg := remote.NewMessageWithNewer(svcInfo, svcSearcher, ri, remote.Call, remote.Server)
 				recvMsg.NewData(callMethod)
-				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), svcInfo, ri, remote.Reply, remote.Server)
+				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), ri, remote.Reply, remote.Server)
 
 				_, err := transHdlrFact.hdlr.OnMessage(ctx, recvMsg, sendMsg)
 				test.Assert(t, err == nil, err)
@@ -939,7 +939,7 @@ func TestInvokeHandlerPanic(t *testing.T) {
 				svcSearcher.addService(svcInfo, mocks.MyServiceHandler(), &RegisterOptions{})
 				recvMsg := remote.NewMessageWithNewer(svcInfo, svcSearcher, ri, remote.Call, remote.Server)
 				recvMsg.NewData(callMethod)
-				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), svcInfo, ri, remote.Reply, remote.Server)
+				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), ri, remote.Reply, remote.Server)
 
 				_, err := transHdlrFact.hdlr.OnMessage(ctx, recvMsg, sendMsg)
 				test.Assert(t, strings.Contains(err.Error(), "happened in biz handler"))
@@ -1078,7 +1078,7 @@ func TestRegisterServiceWithMiddleware(t *testing.T) {
 				svcSearcher.addService(svcInfo, mocks.MyServiceHandler(), &RegisterOptions{})
 				recvMsg := remote.NewMessageWithNewer(svcInfo, svcSearcher, ri, remote.Call, remote.Server)
 				recvMsg.NewData(callMethod)
-				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), svcInfo, ri, remote.Reply, remote.Server)
+				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), ri, remote.Reply, remote.Server)
 
 				_, err := transHdlrFact.hdlr.OnMessage(ctx, recvMsg, sendMsg)
 				test.Assert(t, err == nil)

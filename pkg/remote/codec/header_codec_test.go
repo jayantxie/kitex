@@ -320,7 +320,7 @@ type mockMsg struct {
 
 func initServerRecvMsgWithMockMsg() remote.Message {
 	req := &mockMsg{}
-	return remote.NewMessage(req, mocks.ServiceInfo(), mockSvrRPCInfo, remote.Call, remote.Server)
+	return remote.NewMessage(req, mockSvrRPCInfo, remote.Call, remote.Server)
 }
 
 func initServerRecvMsg() remote.Message {
@@ -339,7 +339,7 @@ func initClientSendMsg(tp transport.Protocol, payloadLen ...int) remote.Message 
 	svcInfo := mocks.ServiceInfo()
 	mi := svcInfo.MethodInfo(mockCliRPCInfo.Invocation().MethodName())
 	mi.NewArgs()
-	msg := remote.NewMessage(req, svcInfo, mockCliRPCInfo, remote.Call, remote.Client)
+	msg := remote.NewMessage(req, mockCliRPCInfo, remote.Call, remote.Client)
 	msg.SetProtocolInfo(remote.NewProtocolInfo(tp, svcInfo.PayloadCodec))
 	return msg
 }
@@ -349,7 +349,7 @@ func initServerSendMsg(tp transport.Protocol, payloadLen ...int) remote.Message 
 	if len(payloadLen) != 0 {
 		resp.msg = string(make([]byte, payloadLen[0]))
 	}
-	msg := remote.NewMessage(resp, mocks.ServiceInfo(), mockSvrRPCInfo, remote.Reply, remote.Server)
+	msg := remote.NewMessage(resp, mockSvrRPCInfo, remote.Reply, remote.Server)
 	msg.SetProtocolInfo(remote.NewProtocolInfo(tp, mocks.ServiceInfo().PayloadCodec))
 	return msg
 }
@@ -357,7 +357,7 @@ func initServerSendMsg(tp transport.Protocol, payloadLen ...int) remote.Message 
 func initClientRecvMsg() remote.Message {
 	resp := &mockMsg{}
 	svcInfo := mocks.ServiceInfo()
-	msg := remote.NewMessage(resp, svcInfo, mockCliRPCInfo, remote.Reply, remote.Client)
+	msg := remote.NewMessage(resp, mockCliRPCInfo, remote.Reply, remote.Client)
 	return msg
 }
 
