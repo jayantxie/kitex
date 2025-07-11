@@ -93,7 +93,7 @@ func TestWithContext(t *testing.T) {
 			}}
 			ink := rpcinfo.NewInvocation("", "mock")
 			ri := rpcinfo.NewRPCInfo(nil, nil, ink, nil, nil)
-			msg := remote.NewMessage(req, svcInfo, ri, remote.Call, remote.Client)
+			msg := remote.NewMessage(req, ri, remote.Call, remote.Client)
 			msg.SetProtocolInfo(remote.NewProtocolInfo(transport.TTHeader, svcInfo.PayloadCodec))
 			bw, br := tb.NewBuffer()
 			bb := remote.NewByteBufferFromBufiox(bw, br)
@@ -108,7 +108,7 @@ func TestWithContext(t *testing.T) {
 				}}
 				ink := rpcinfo.NewInvocation("", "mock")
 				ri := rpcinfo.NewRPCInfo(nil, nil, ink, nil, nil)
-				msg := remote.NewMessage(resp, svcInfo, ri, remote.Call, remote.Client)
+				msg := remote.NewMessage(resp, ri, remote.Call, remote.Client)
 				msg.SetProtocolInfo(remote.NewProtocolInfo(transport.TTHeader, svcInfo.PayloadCodec))
 				msg.SetPayloadLen(wl)
 				err = payloadCodec.Unmarshal(ctx, msg, bb)
@@ -346,7 +346,7 @@ func TestSkipDecoder(t *testing.T) {
 func newMsg(data interface{}) remote.Message {
 	ink := rpcinfo.NewInvocation("", "mock")
 	ri := rpcinfo.NewRPCInfo(nil, nil, ink, nil, nil)
-	return remote.NewMessage(data, svcInfo, ri, remote.Call, remote.Client)
+	return remote.NewMessage(data, ri, remote.Call, remote.Client)
 }
 
 func initSendMsg(tp transport.Protocol) remote.Message {
@@ -377,14 +377,14 @@ func compare(t *testing.T, sendMsg, recvMsg remote.Message) {
 }
 
 func initServerErrorMsg(tp transport.Protocol, ri rpcinfo.RPCInfo, transErr *remote.TransError) remote.Message {
-	errMsg := remote.NewMessage(transErr, svcInfo, ri, remote.Exception, remote.Server)
+	errMsg := remote.NewMessage(transErr, ri, remote.Exception, remote.Server)
 	errMsg.SetProtocolInfo(remote.NewProtocolInfo(tp, svcInfo.PayloadCodec))
 	return errMsg
 }
 
 func initClientRecvMsg(ri rpcinfo.RPCInfo) remote.Message {
 	var resp interface{}
-	clientRecvMsg := remote.NewMessage(resp, svcInfo, ri, remote.Reply, remote.Client)
+	clientRecvMsg := remote.NewMessage(resp, ri, remote.Reply, remote.Client)
 	return clientRecvMsg
 }
 

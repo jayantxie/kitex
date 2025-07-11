@@ -68,7 +68,7 @@ func TestThriftProtocolCheck(t *testing.T) {
 
 			resetRIAndMSG := func() {
 				ri = rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation("", ""), rpcinfo.NewRPCConfig(), rpcinfo.NewRPCStats())
-				msg = remote.NewMessage(req, mocks.ServiceInfo(), ri, remote.Call, remote.Server)
+				msg = remote.NewMessage(req, ri, remote.Call, remote.Server)
 			}
 
 			// 1. isTTheader
@@ -158,7 +158,7 @@ func TestProtobufProtocolCheck(t *testing.T) {
 			var isTTHeader bool
 			var flagBuf []byte
 			ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation("", ""), rpcinfo.NewRPCConfig(), rpcinfo.NewRPCStats())
-			msg := remote.NewMessage(req, mocks.ServiceInfo(), ri, remote.Call, remote.Server)
+			msg := remote.NewMessage(req, ri, remote.Call, remote.Server)
 
 			// 1. isTTHeader framed
 			flagBuf = make([]byte, 8*2)
@@ -383,7 +383,7 @@ func TestCodecTypeNotMatchWithServiceInfoPayloadCodec(t *testing.T) {
 			svcInfo := &serviceinfo.ServiceInfo{
 				PayloadCodec: serviceinfo.Protobuf,
 			}
-			msg := remote.NewMessage(req, svcInfo, ri, remote.Call, remote.Server)
+			msg := remote.NewMessage(req, ri, remote.Call, remote.Server)
 			msg.SetProtocolInfo(remote.ProtocolInfo{TransProto: transport.TTHeader, CodecType: serviceinfo.Thrift})
 			err := codec.Encode(context.Background(), msg, tb.NewBuffer())
 			test.Assert(t, err == nil, err)
@@ -392,7 +392,7 @@ func TestCodecTypeNotMatchWithServiceInfoPayloadCodec(t *testing.T) {
 			svcInfo = &serviceinfo.ServiceInfo{
 				PayloadCodec: serviceinfo.Thrift,
 			}
-			msg = remote.NewMessage(req, svcInfo, ri, remote.Call, remote.Server)
+			msg = remote.NewMessage(req, ri, remote.Call, remote.Server)
 			msg.SetProtocolInfo(remote.ProtocolInfo{TransProto: transport.TTHeader, CodecType: serviceinfo.Protobuf})
 			err = codec.Encode(context.Background(), msg, tb.NewBuffer())
 			test.Assert(t, err != nil)

@@ -40,6 +40,8 @@ type InvocationSetter interface {
 	SetPackageName(name string)
 	SetServiceName(name string)
 	SetMethodName(name string)
+	SetServiceInfo(info *serviceinfo.ServiceInfo)
+	SetMethodInfo(methodInfo serviceinfo.MethodInfo)
 	SetStreamingMode(mode serviceinfo.StreamingMode)
 	SetSeqID(seqID int32)
 	SetBizStatusErr(err kerrors.BizStatusErrorIface)
@@ -49,6 +51,8 @@ type InvocationSetter interface {
 type invocation struct {
 	packageName   string
 	serviceName   string
+	svcInfo       *serviceinfo.ServiceInfo
+	methodInfo    serviceinfo.MethodInfo
 	methodName    string
 	streamingMode serviceinfo.StreamingMode
 	seqID         int32
@@ -122,6 +126,26 @@ func (i *invocation) MethodName() string {
 // SetMethodName implements the InvocationSetter interface.
 func (i *invocation) SetMethodName(name string) {
 	i.methodName = name
+}
+
+// ServiceInfo implements the Invocation interface.
+func (i *invocation) ServiceInfo() *serviceinfo.ServiceInfo {
+	return i.svcInfo
+}
+
+// SetServiceInfo implements the InvocationSetter interface.
+func (i *invocation) SetServiceInfo(svcInfo *serviceinfo.ServiceInfo) {
+	i.svcInfo = svcInfo
+}
+
+// MethodInfo implements the Invocation interface.
+func (i *invocation) MethodInfo() serviceinfo.MethodInfo {
+	return i.methodInfo
+}
+
+// SetMethodInfo implements the InvocationSetter interface.
+func (i *invocation) SetMethodInfo(methodInfo serviceinfo.MethodInfo) {
+	i.methodInfo = methodInfo
 }
 
 // StreamingMode implements the Invocation interface.

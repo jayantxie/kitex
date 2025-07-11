@@ -34,13 +34,13 @@ import (
 func TestIsTTHeader(t *testing.T) {
 	t.Run("with ttheader", func(t *testing.T) {
 		ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation("", ""), nil, rpcinfo.NewRPCStats())
-		msg := remote.NewMessage(nil, mocks.ServiceInfo(), ri, remote.Call, remote.Server)
+		msg := remote.NewMessage(nil, ri, remote.Call, remote.Server)
 		msg.SetProtocolInfo(remote.NewProtocolInfo(transport.TTHeader, serviceinfo.Thrift))
 		test.Assert(t, isTTHeader(msg))
 	})
 	t.Run("with ttheader framed", func(t *testing.T) {
 		ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation("", ""), nil, rpcinfo.NewRPCStats())
-		msg := remote.NewMessage(nil, mocks.ServiceInfo(), ri, remote.Call, remote.Server)
+		msg := remote.NewMessage(nil, ri, remote.Call, remote.Server)
 		msg.SetProtocolInfo(remote.NewProtocolInfo(transport.TTHeaderFramed, serviceinfo.Thrift))
 		test.Assert(t, isTTHeader(msg))
 	})
@@ -59,7 +59,7 @@ func TestTTHeaderClientWriteMetainfo(t *testing.T) {
 	fromInfo := rpcinfo.NewEndpointInfo("fromServiceName", "fromMethod", nil, nil)
 	toInfo := rpcinfo.NewEndpointInfo("toServiceName", "toMethod", nil, nil)
 	ri := rpcinfo.NewRPCInfo(fromInfo, toInfo, rpcinfo.NewInvocation("", ""), cfg, rpcinfo.NewRPCStats())
-	msg := remote.NewMessage(nil, mocks.ServiceInfo(), ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(nil, ri, remote.Call, remote.Client)
 	ri.Invocation().(rpcinfo.InvocationSetter).SetServiceName(msg.ServiceInfo().ServiceName)
 
 	// pure payload, no effect
@@ -94,7 +94,7 @@ func TestTTHeaderServerReadMetainfo(t *testing.T) {
 	ctx := context.Background()
 	ri := rpcinfo.NewRPCInfo(rpcinfo.EmptyEndpointInfo(), nil, rpcinfo.NewInvocation("", ""),
 		rpcinfo.NewRPCConfig(), rpcinfo.NewRPCStats())
-	msg := remote.NewMessage(nil, mocks.ServiceInfo(), ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(nil, ri, remote.Call, remote.Client)
 
 	hd := map[uint16]string{
 		transmeta.FromService: "fromService",
@@ -122,7 +122,7 @@ func TestTTHeaderServerWriteMetainfo(t *testing.T) {
 	ctx := context.Background()
 	ri := rpcinfo.NewRPCInfo(nil, rpcinfo.NewEndpointInfo("", "mock", nil, nil), rpcinfo.NewInvocation("", ""),
 		rpcinfo.NewRPCConfig(), rpcinfo.NewRPCStats())
-	msg := remote.NewMessage(nil, mocks.ServiceInfo(), ri, remote.Call, remote.Client)
+	msg := remote.NewMessage(nil, ri, remote.Call, remote.Client)
 
 	msg.SetProtocolInfo(remote.NewProtocolInfo(transport.PurePayload, serviceinfo.Thrift))
 	_, err := ServerTTHeaderHandler.WriteMeta(ctx, msg)

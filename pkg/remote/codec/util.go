@@ -21,7 +21,9 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/kitex/pkg/remote"
+	"github.com/cloudwego/kitex/pkg/remote/trans"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
+	"github.com/cloudwego/kitex/pkg/serviceinfo"
 )
 
 const (
@@ -50,12 +52,26 @@ func SetOrCheckMethodName(methodName string, message remote.Message) error {
 		return errors.New("the interface Invocation doesn't implement InvocationSetter")
 	}
 	inkSetter.SetMethodName(methodName)
-	svcInfo, err := message.SpecifyServiceInfo(ink.ServiceName(), methodName)
-	if err != nil {
-		return err
+	var svcInfo *serviceinfo.ServiceInfo
+	var methodInfo serviceinfo.MethodInfo
+	if svcInfo = ink.ServiceInfo(); svcInfo == nil {
+		// for ping pong server, svc info is nil until the request decoded
+		svcSearcher := remote.GetServiceSearcher(ri)
+		if svcSearcher == nil {
+			return errors.New("RPCInfo doesn't contains a service searcher")
+		}
+		svcInfo = svcSearcher.SearchService(ink.ServiceName(), methodName, false)
+		if svcInfo == nil {
+			return remote.NewTransErrorWithMsg(remote.UnknownService, fmt.Sprintf("unknown service %s, method %s", ink.ServiceName(), methodName))
+		}
+	}
+	if methodInfo = svcInfo.MethodInfo(methodName); methodInfo == nil {
+		return remote.NewTransErrorWithMsg(remote.UnknownMethod, fmt.Sprintf("unknown method %s", methodName))
 	}
 	inkSetter.SetPackageName(svcInfo.GetPackageName())
 	inkSetter.SetServiceName(svcInfo.ServiceName)
+	inkSetter.SetServiceInfo(svcInfo)
+	inkSetter.SetMethodInfo(methodInfo)
 
 	// unknown method doesn't set methodName for RPCInfo.To(), or lead inconsistent with old version
 	rpcinfo.AsMutableEndpointInfo(ri.To()).SetMethod(methodName)

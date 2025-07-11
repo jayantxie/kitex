@@ -522,17 +522,14 @@ func (kc *kClient) invokeHandleEndpoint() (endpoint.Endpoint, error) {
 		}
 
 		defer cli.Recycle()
-		config := ri.Config()
-		m := kc.svcInfo.MethodInfo(methodName)
+		m := ri.Invocation().MethodInfo()
 		if m == nil {
 			return fmt.Errorf("method info is nil, methodName=%s, serviceInfo=%+v", methodName, kc.svcInfo)
 		} else if m.OneWay() {
-			sendMsg = remote.NewMessage(req, kc.svcInfo, ri, remote.Oneway, remote.Client)
+			sendMsg = remote.NewMessage(req, ri, remote.Oneway, remote.Client)
 		} else {
-			sendMsg = remote.NewMessage(req, kc.svcInfo, ri, remote.Call, remote.Client)
+			sendMsg = remote.NewMessage(req, ri, remote.Call, remote.Client)
 		}
-		protocolInfo := remote.NewProtocolInfo(config.TransportProtocol(), kc.svcInfo.PayloadCodec)
-		sendMsg.SetProtocolInfo(protocolInfo)
 
 		if err = cli.Send(ctx, ri, sendMsg); err != nil {
 			return
@@ -542,8 +539,7 @@ func (kc *kClient) invokeHandleEndpoint() (endpoint.Endpoint, error) {
 			return nil
 		}
 
-		recvMsg = remote.NewMessage(resp, kc.opt.RemoteOpt.SvcInfo, ri, remote.Reply, remote.Client)
-		recvMsg.SetProtocolInfo(protocolInfo)
+		recvMsg = remote.NewMessage(resp, ri, remote.Reply, remote.Client)
 		err = cli.Recv(ctx, ri, recvMsg)
 		return err
 	}, nil
@@ -802,8 +798,11 @@ func initRPCInfo(ctx context.Context, method string, opt *client.Options, svcInf
 		rpcStats.ImmutableView(),
 	)
 
+	inkSetter := ri.Invocation().(rpcinfo.InvocationSetter)
+	inkSetter.SetServiceInfo(svcInfo)
 	if mi != nil {
-		ri.Invocation().(rpcinfo.InvocationSetter).SetStreamingMode(mi.StreamingMode())
+		inkSetter.SetStreamingMode(mi.StreamingMode())
+		inkSetter.SetMethodInfo(mi)
 	}
 	if streamCall {
 		cfg.SetInteractionMode(rpcinfo.Streaming)
