@@ -38,12 +38,12 @@ func SetOrCheckMethodName(methodName string, message remote.Message) error {
 	if methodName == "" {
 		return fmt.Errorf("method name that receive is empty")
 	}
-	if callMethodName == methodName {
-		return nil
-	}
-	// the server's callMethodName may not be empty if RPCInfo is based on connection multiplexing
-	// for the server side callMethodName ! = methodName is normal
 	if message.RPCRole() == remote.Client {
+		if callMethodName == methodName {
+			return nil
+		}
+		// the server's callMethodName may not be empty if RPCInfo is based on connection multiplexing
+		// for the server side callMethodName ! = methodName is normal
 		return fmt.Errorf("wrong method name, expect=%s, actual=%s", callMethodName, methodName)
 	}
 	inkSetter, ok := ink.(rpcinfo.InvocationSetter)
