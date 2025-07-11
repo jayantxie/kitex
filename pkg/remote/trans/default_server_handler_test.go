@@ -26,13 +26,14 @@ import (
 	"github.com/golang/mock/gomock"
 
 	"github.com/cloudwego/kitex/internal/mocks"
+	mockmessage "github.com/cloudwego/kitex/internal/mocks/message"
 	remotemocks "github.com/cloudwego/kitex/internal/mocks/remote"
 	"github.com/cloudwego/kitex/internal/mocks/stats"
 	"github.com/cloudwego/kitex/internal/test"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/remote"
+	"github.com/cloudwego/kitex/pkg/remote/codec"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
-	"github.com/cloudwego/kitex/pkg/serviceinfo"
 )
 
 var (
@@ -74,16 +75,9 @@ func TestDefaultSvrTransHandler(t *testing.T) {
 
 	ctx := context.Background()
 	conn := &mocks.Conn{}
-	msg := &MockMessage{
+	msg := &mockmessage.MockMessage{
 		RPCInfoFunc: func() rpcinfo.RPCInfo {
 			return newMockRPCInfo()
-		},
-		ServiceInfoFunc: func() *serviceinfo.ServiceInfo {
-			return &serviceinfo.ServiceInfo{
-				Methods: map[string]serviceinfo.MethodInfo{
-					"method": serviceinfo.NewMethodInfo(nil, nil, nil, false),
-				},
-			}
 		},
 	}
 	ctx, err = handler.Write(ctx, conn, msg)
@@ -128,8 +122,8 @@ func TestSvrTransHandlerBizError(t *testing.T) {
 				return nil
 			},
 			DecodeFunc: func(ctx context.Context, msg remote.Message, in remote.ByteBuffer) error {
-				msg.SpecifyServiceInfo(mocks.MockServiceName, mocks.MockMethod)
-				return nil
+				msg.RPCInfo().Invocation().(rpcinfo.InvocationSetter).SetServiceName(mocks.MockServiceName)
+				return codec.SetOrCheckMethodName(mocks.MockMethod, msg)
 			},
 		},
 		SvcSearcher:   svcSearcher,
@@ -187,7 +181,6 @@ func TestSvrTransHandlerReadErr(t *testing.T) {
 				return nil
 			},
 			DecodeFunc: func(ctx context.Context, msg remote.Message, in remote.ByteBuffer) error {
-				msg.SpecifyServiceInfo(mocks.MockServiceName, mocks.MockMethod)
 				return mockErr
 			},
 		},
@@ -298,7 +291,6 @@ func TestSvrTransHandlerOnReadHeartbeat(t *testing.T) {
 			},
 			DecodeFunc: func(ctx context.Context, msg remote.Message, in remote.ByteBuffer) error {
 				msg.SetMessageType(remote.Heartbeat)
-				msg.SpecifyServiceInfo(mocks.MockServiceName, mocks.MockMethod)
 				return nil
 			},
 		},
