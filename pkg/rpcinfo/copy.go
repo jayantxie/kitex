@@ -86,6 +86,8 @@ func copyInvocation(i Invocation) Invocation {
 		packageName: i.PackageName(),
 		serviceName: i.ServiceName(),
 		methodName:  i.MethodName(),
+		svcInfo:     i.ServiceInfo(),
+		methodInfo:  i.MethodInfo(),
 		seqID:       i.SeqID(),
 	}
 }

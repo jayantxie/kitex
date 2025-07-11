@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/kitex/pkg/remote"
-	"github.com/cloudwego/kitex/pkg/remote/trans"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
 )
@@ -66,7 +65,7 @@ func SetOrCheckMethodName(methodName string, message remote.Message) error {
 		}
 	}
 	if methodInfo = svcInfo.MethodInfo(methodName); methodInfo == nil {
-		return remote.NewTransErrorWithMsg(remote.UnknownMethod, fmt.Sprintf("unknown method %s", methodName))
+		return remote.NewTransErrorWithMsg(remote.UnknownMethod, fmt.Sprintf("unknown method %s (service %s)", methodName, ink.ServiceName()))
 	}
 	inkSetter.SetPackageName(svcInfo.GetPackageName())
 	inkSetter.SetServiceName(svcInfo.ServiceName)
