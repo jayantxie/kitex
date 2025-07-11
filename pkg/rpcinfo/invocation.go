@@ -198,6 +198,8 @@ func (i *invocation) zero() {
 	i.packageName = ""
 	i.serviceName = ""
 	i.methodName = ""
+	i.svcInfo = nil
+	i.methodInfo = nil
 	i.bizErr = nil
 	for key := range i.extra {
 		delete(i.extra, key)
