@@ -32,7 +32,6 @@ import (
 	"github.com/cloudwego/kitex/internal/test"
 	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/remote"
-	"github.com/cloudwego/kitex/pkg/remote/codec"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 )
 
@@ -122,8 +121,12 @@ func TestSvrTransHandlerBizError(t *testing.T) {
 				return nil
 			},
 			DecodeFunc: func(ctx context.Context, msg remote.Message, in remote.ByteBuffer) error {
-				msg.RPCInfo().Invocation().(rpcinfo.InvocationSetter).SetServiceName(mocks.MockServiceName)
-				return codec.SetOrCheckMethodName(mocks.MockMethod, msg)
+				mink := msg.RPCInfo().Invocation().(rpcinfo.InvocationSetter)
+				mink.SetServiceName(mocks.MockServiceName)
+				mink.SetMethodName(mocks.MockMethod)
+				mink.SetServiceInfo(svcInfo)
+				mink.SetMethodInfo(svcInfo.MethodInfo(mocks.MockMethod))
+				return nil
 			},
 		},
 		SvcSearcher:   svcSearcher,

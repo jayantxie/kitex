@@ -24,7 +24,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 
-	"github.com/cloudwego/kitex/internal/mocks"
 	mocksnetpoll "github.com/cloudwego/kitex/internal/mocks/netpoll"
 	mocksremote "github.com/cloudwego/kitex/internal/mocks/remote"
 	"github.com/cloudwego/kitex/internal/test"
@@ -197,7 +196,6 @@ func TestRecv(t *testing.T) {
 	addr := utils.NewNetAddr("tcp", "to")
 	ri := newMockRPCInfo(addr)
 
-	svcInfo := mocks.ServiceInfo()
 	var resp interface{}
 	msg := remote.NewMessage(resp, ri, remote.Call, remote.Client)
 

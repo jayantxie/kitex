@@ -127,7 +127,8 @@ func TestHTTPOnMessage(t *testing.T) {
 	svcSearcher := remotemocks.NewDefaultSvcSearcher()
 	ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation(svcInfo.ServiceName, method), nil, rpcinfo.NewRPCStats())
 	ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
-	recvMsg := remote.NewMessageWithNewer(svcInfo, svcSearcher, ri, remote.Call, remote.Server)
+	remote.SetServiceSearcher(ri, svcSearcher)
+	recvMsg := remote.NewMessage(nil, ri, remote.Call, remote.Server)
 	sendMsg := remote.NewMessage(svcInfo.MethodInfo(method).NewResult(), ri, remote.Reply, remote.Server)
 
 	// 2. test

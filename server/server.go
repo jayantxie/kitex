@@ -433,11 +433,12 @@ func (s *server) streamHandleEndpoint() sep.StreamEndpoint {
 		}
 		defer func() {
 			if handlerErr := recover(); handlerErr != nil {
+				stack := string(debug.Stack())
 				err = kerrors.ErrPanic.WithCauseAndStack(
 					fmt.Errorf(
 						"[happened in biz handler, method=%s.%s, please check the panic at the server side] %s",
 						svcInfo.ServiceName, methodName, handlerErr),
-					string(debug.Stack()))
+					stack)
 				rpcStats := rpcinfo.AsMutableRPCStats(ri.Stats())
 				rpcStats.SetPanicked(err)
 			}
