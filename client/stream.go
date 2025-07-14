@@ -60,6 +60,7 @@ func (kc *kClient) Stream(ctx context.Context, method string, request, response 
 	ctx = kc.opt.TracerCtl.DoStart(ctx, ri)
 	var reportErr error
 	var err error
+	var cs streaming.ClientStream
 	defer func() {
 		if panicInfo := recover(); panicInfo != nil {
 			err = rpcinfo.ClientPanicToErr(ctx, panicInfo, ri, false)
@@ -70,7 +71,13 @@ func (kc *kClient) Stream(ctx context.Context, method string, request, response 
 		}
 	}()
 
-	cs, err := kc.sEps(ctx)
+	if m := ri.Invocation().MethodInfo(); m == nil {
+		err = kerrors.ErrRemoteOrNetwork.WithCause(fmt.Errorf("method info is nil, methodName=%s, serviceInfo=%+v", method, kc.svcInfo))
+		reportErr = err
+		return err
+	}
+
+	cs, err = kc.sEps(ctx)
 	if err != nil {
 		reportErr = err
 		return err
@@ -120,6 +127,12 @@ func (kc *kClient) StreamX(ctx context.Context, method string) (streaming.Client
 			kc.opt.TracerCtl.DoFinish(ctx, ri, reportErr)
 		}
 	}()
+
+	if m := ri.Invocation().MethodInfo(); m == nil {
+		err = kerrors.ErrRemoteOrNetwork.WithCause(fmt.Errorf("method info is nil, methodName=%s, serviceInfo=%+v", method, kc.svcInfo))
+		reportErr = err
+		return nil, err
+	}
 
 	cs, err = kc.sEps(ctx)
 	if err != nil {

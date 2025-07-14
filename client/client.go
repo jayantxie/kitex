@@ -401,7 +401,9 @@ func (kc *kClient) Call(ctx context.Context, method string, request, response in
 	// Add necessary keys to context for isolation between kitex client method calls
 	ctx = retry.PrepareRetryContext(ctx)
 
-	if kc.opt.UnaryOptions.RetryContainer == nil {
+	if m := ri.Invocation().MethodInfo(); m == nil {
+		err = kerrors.ErrRemoteOrNetwork.WithCause(fmt.Errorf("method info is nil, methodName=%s, serviceInfo=%+v", method, kc.svcInfo))
+	} else if kc.opt.UnaryOptions.RetryContainer == nil {
 		// call without retry policy
 		err = kc.eps(ctx, request, response)
 		if err == nil {
@@ -514,7 +516,6 @@ func (kc *kClient) invokeHandleEndpoint() (endpoint.Endpoint, error) {
 			remote.RecycleMessage(recvMsg)
 		}()
 		ri := rpcinfo.GetRPCInfo(ctx)
-		methodName := ri.Invocation().MethodName()
 
 		cli, err := remotecli.NewClient(ctx, ri, transPipl, kc.opt.RemoteOpt)
 		if err != nil {
@@ -523,9 +524,7 @@ func (kc *kClient) invokeHandleEndpoint() (endpoint.Endpoint, error) {
 
 		defer cli.Recycle()
 		m := ri.Invocation().MethodInfo()
-		if m == nil {
-			return fmt.Errorf("method info is nil, methodName=%s, serviceInfo=%+v", methodName, kc.svcInfo)
-		} else if m.OneWay() {
+		if m.OneWay() {
 			sendMsg = remote.NewMessage(req, ri, remote.Oneway, remote.Client)
 		} else {
 			sendMsg = remote.NewMessage(req, ri, remote.Call, remote.Client)

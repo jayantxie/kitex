@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -71,8 +72,24 @@ func TestStream(t *testing.T) {
 
 	_ = kc.init()
 
-	err = kc.Stream(ctx, "mock_method", req, resp)
+	err = kc.Stream(ctx, mocks.MockMethod, req, resp)
 	test.Assert(t, err == nil, err)
+}
+
+func TestStreamNoMethod(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ctx := context.Background()
+	kc := &kClient{
+		opt:     client.NewOptions(newOpts(ctrl)),
+		svcInfo: svcInfo,
+	}
+	_ = kc.init()
+	_, err := kc.StreamX(ctx, "mock_method_not_found")
+	test.Assert(t, strings.Contains(err.Error(), "remote or network error: method info is nil, methodName=mock_method_not_found"))
+
+	err = kc.Stream(ctx, "mock_method_not_found", req, resp)
+	test.Assert(t, strings.Contains(err.Error(), "remote or network error: method info is nil, methodName=mock_method_not_found"))
 }
 
 func TestStreaming(t *testing.T) {
