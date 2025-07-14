@@ -46,10 +46,7 @@ func SetOrCheckMethodName(methodName string, message remote.Message) error {
 		// for the server side callMethodName ! = methodName is normal
 		return fmt.Errorf("wrong method name, expect=%s, actual=%s", callMethodName, methodName)
 	}
-	inkSetter, ok := ink.(rpcinfo.InvocationSetter)
-	if !ok {
-		return errors.New("the interface Invocation doesn't implement InvocationSetter")
-	}
+	inkSetter := ink.(rpcinfo.InvocationSetter)
 	inkSetter.SetMethodName(methodName)
 	var svcInfo *serviceinfo.ServiceInfo
 	var methodInfo serviceinfo.MethodInfo

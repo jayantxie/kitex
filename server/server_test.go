@@ -781,9 +781,10 @@ func testInvokeHandlerWithSession(t *testing.T, fail bool, ad string) {
 			{ // mock server call
 				ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation(svcInfo.ServiceName, callMethod), nil, rpcinfo.NewRPCStats())
 				ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
-				svcSearcher := newServices()
-				svcSearcher.addService(svcInfo, mocks.MyServiceHandler(), &RegisterOptions{})
-				recvMsg := remote.NewMessageWithNewer(svcInfo, svcSearcher, ri, remote.Call, remote.Server)
+				inkSetter := ri.Invocation().(rpcinfo.InvocationSetter)
+				inkSetter.SetServiceInfo(svcInfo)
+				inkSetter.SetMethodInfo(svcInfo.MethodInfo(callMethod))
+				recvMsg := remote.NewMessage(nil, ri, remote.Call, remote.Server)
 				recvMsg.NewData(callMethod)
 				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), ri, remote.Reply, remote.Server)
 
@@ -870,9 +871,10 @@ func TestInvokeHandlerExec(t *testing.T) {
 			{ // mock server call
 				ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation(svcInfo.ServiceName, callMethod), nil, rpcinfo.NewRPCStats())
 				ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
-				svcSearcher := newServices()
-				svcSearcher.addService(svcInfo, mocks.MyServiceHandler(), &RegisterOptions{})
-				recvMsg := remote.NewMessageWithNewer(svcInfo, svcSearcher, ri, remote.Call, remote.Server)
+				inkSetter := ri.Invocation().(rpcinfo.InvocationSetter)
+				inkSetter.SetServiceInfo(svcInfo)
+				inkSetter.SetMethodInfo(svcInfo.MethodInfo(callMethod))
+				recvMsg := remote.NewMessage(nil, ri, remote.Call, remote.Server)
 				recvMsg.NewData(callMethod)
 				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), ri, remote.Reply, remote.Server)
 
@@ -935,9 +937,10 @@ func TestInvokeHandlerPanic(t *testing.T) {
 				// mock server call
 				ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation(svcInfo.ServiceName, callMethod), nil, rpcinfo.NewRPCStats())
 				ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
-				svcSearcher := newServices()
-				svcSearcher.addService(svcInfo, mocks.MyServiceHandler(), &RegisterOptions{})
-				recvMsg := remote.NewMessageWithNewer(svcInfo, svcSearcher, ri, remote.Call, remote.Server)
+				inkSetter := ri.Invocation().(rpcinfo.InvocationSetter)
+				inkSetter.SetServiceInfo(svcInfo)
+				inkSetter.SetMethodInfo(svcInfo.MethodInfo(callMethod))
+				recvMsg := remote.NewMessage(nil, ri, remote.Call, remote.Server)
 				recvMsg.NewData(callMethod)
 				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), ri, remote.Reply, remote.Server)
 
@@ -1074,9 +1077,10 @@ func TestRegisterServiceWithMiddleware(t *testing.T) {
 				// mock server call
 				ri := rpcinfo.NewRPCInfo(nil, nil, rpcinfo.NewInvocation(svcInfo.ServiceName, callMethod), nil, rpcinfo.NewRPCStats())
 				ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
-				svcSearcher := newServices()
-				svcSearcher.addService(svcInfo, mocks.MyServiceHandler(), &RegisterOptions{})
-				recvMsg := remote.NewMessageWithNewer(svcInfo, svcSearcher, ri, remote.Call, remote.Server)
+				inkSetter := ri.Invocation().(rpcinfo.InvocationSetter)
+				inkSetter.SetServiceInfo(svcInfo)
+				inkSetter.SetMethodInfo(svcInfo.MethodInfo(callMethod))
+				recvMsg := remote.NewMessage(nil, ri, remote.Call, remote.Server)
 				recvMsg.NewData(callMethod)
 				sendMsg := remote.NewMessage(svcInfo.MethodInfo(callMethod).NewResult(), ri, remote.Reply, remote.Server)
 
@@ -1284,19 +1288,11 @@ type streamingMethodArg struct {
 	streamHdlr serviceinfo.MethodHandler
 }
 
-func newStreamingServer(svcName string, args []streamingMethodArg, mws []endpoint.Middleware) *server {
-	methods := make(map[string]serviceinfo.MethodInfo)
-	for _, arg := range args {
-		methods[arg.methodName] = serviceinfo.NewMethodInfo(arg.streamHdlr, nil, nil, false, serviceinfo.WithStreamingMode(arg.mode))
-	}
-	svcInfo := &serviceinfo.ServiceInfo{
-		ServiceName: svcName,
-		Methods:     methods,
-	}
+func newStreamingServer(svcInfo *serviceinfo.ServiceInfo, mws []endpoint.Middleware) *server {
 	svr := &server{
 		svcs: &services{
 			svcMap: map[string]*service{
-				svcName: {
+				svcInfo.ServiceName: {
 					svcInfo:            svcInfo,
 					serviceMiddlewares: serviceMiddlewares{MW: endpoint.Chain(mws...)},
 				},
@@ -1356,7 +1352,15 @@ func TestStreamCtxDiverge(t *testing.T) {
 			}
 		},
 	}
-	svr := newStreamingServer(testService, args, mws)
+	methods := make(map[string]serviceinfo.MethodInfo)
+	for _, arg := range args {
+		methods[arg.methodName] = serviceinfo.NewMethodInfo(arg.streamHdlr, nil, nil, false, serviceinfo.WithStreamingMode(arg.mode))
+	}
+	svcInfo := &serviceinfo.ServiceInfo{
+		ServiceName: testService,
+		Methods:     methods,
+	}
+	svr := newStreamingServer(svcInfo, mws)
 	svr.buildInvokeChain(context.Background())
 
 	for _, tc := range testcases {
@@ -1366,6 +1370,8 @@ func TestStreamCtxDiverge(t *testing.T) {
 			test.Assert(t, ok)
 			ink.SetServiceName(testService)
 			ink.SetMethodName(tc.methodName)
+			ink.SetServiceInfo(svcInfo)
+			ink.SetMethodInfo(svcInfo.MethodInfo(tc.methodName))
 			ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 			mock := &mockStream{}
 			err := svr.eps(ctx, &streaming.Args{ServerStream: mock}, nil)
