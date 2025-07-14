@@ -151,6 +151,19 @@ func TestCall(t *testing.T) {
 	test.Assert(t, err == nil, err)
 }
 
+func TestCallNoMethod(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	cli := newMockClient(t, ctrl)
+	ctx := context.Background()
+	req := new(MockTStruct)
+	res := new(MockTStruct)
+
+	err := cli.Call(ctx, "mock_method_not_found", req, res)
+	test.Assert(t, strings.Contains(err.Error(), "remote or network error: method info is nil, methodName=mock_method_not_found"))
+}
+
 func TestCallWithContextBackup(t *testing.T) {
 	localsession.InitDefaultManager(localsession.DefaultManagerOptions())
 	d, dd := "d", "dd"
