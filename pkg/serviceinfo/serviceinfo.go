@@ -35,13 +35,13 @@ const (
 	GenericService = "$GenericService" // private as "$"
 	// GenericMethod name
 	GenericMethod = "$GenericCall"
-	// GenericClientStreamingMethod name
-	GenericClientStreamingMethod = "$GenericClientStreamingMethod"
-	// GenericServerStreamingMethod name
-	GenericServerStreamingMethod = "$GenericServerStreamingMethod"
-	// GenericBidirectionalStreamingMethod name
-	GenericBidirectionalStreamingMethod = "$GenericBidirectionalStreamingMethod"
+	// PackageName name
+	PackageName = "PackageName"
+	// CombineService name
+	CombineService = "combine_service"
 )
+
+type GenericMethodFunc func(ctx context.Context, methodName string) MethodInfo
 
 // ServiceInfo to record meta info of service
 type ServiceInfo struct {
@@ -55,7 +55,7 @@ type ServiceInfo struct {
 	HandlerType interface{}
 
 	// Methods contains the meta information of methods supported by the service.
-	// For generic service, there is only one method named by the constant `GenericMethod`.
+	// For generic service, there is only one method named by the constant `BinaryMethodInfo`.
 	Methods map[string]MethodInfo
 
 	// PayloadCodec is the codec of payload.
@@ -68,9 +68,11 @@ type ServiceInfo struct {
 	// as otherwise we need to add a new field in the struct
 	Extra map[string]interface{}
 
-	// GenericMethod returns a MethodInfo for the given name.
-	// It is used by generic calls only.
-	GenericMethod func(name string) MethodInfo
+	// GenericMethod returns a MethodInfo for the given context.
+	// If it fails to obtain MethodInfo from Methods map, it will fallback to
+	// calling this function to obtain MethodInfo, generally used for binary generic
+	// or unknown method traffic capture.
+	GenericMethod GenericMethodFunc
 }
 
 // GetPackageName returns the PackageName.
@@ -80,23 +82,23 @@ func (i *ServiceInfo) GetPackageName() (pkg string) {
 	if i.PackageName != "" {
 		return i.PackageName
 	}
-	pkg, _ = i.Extra["PackageName"].(string)
+	pkg, _ = i.Extra[PackageName].(string)
 	return
 }
 
 // MethodInfo gets MethodInfo.
-func (i *ServiceInfo) MethodInfo(name string) MethodInfo {
+func (i *ServiceInfo) MethodInfo(ctx context.Context, name string) MethodInfo {
 	if i == nil {
 		return nil
 	}
-	if _, ok := i.Extra["generic"]; ok {
-		if i.GenericMethod != nil {
-			return i.GenericMethod(name)
-		}
-		// TODO: modify when server side supports grpc generic
-		return i.Methods[GenericMethod]
+	if mi := i.Methods[name]; mi != nil {
+		return mi
 	}
-	return i.Methods[name]
+	if i.GenericMethod != nil {
+		// generic method searching, must be after normal method searching, otherwise unknown method handler is misused.
+		return i.GenericMethod(ctx, name)
+	}
+	return nil
 }
 
 type StreamingMode int

@@ -125,7 +125,7 @@ func TestSvrTransHandlerBizError(t *testing.T) {
 				mink.SetServiceName(mocks.MockServiceName)
 				mink.SetMethodName(mocks.MockMethod)
 				mink.SetServiceInfo(svcInfo)
-				mink.SetMethodInfo(svcInfo.MethodInfo(mocks.MockMethod))
+				mink.SetMethodInfo(svcInfo.MethodInfo(context.Background(), mocks.MockMethod))
 				return nil
 			},
 		},

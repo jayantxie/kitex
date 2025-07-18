@@ -208,7 +208,7 @@ func TestAddService(t *testing.T) {
 			test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) != nil)
 		} else {
 			test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) == nil)
-			test.Assert(t, svcs.SearchService(tcase.serviceName, tcase.methodName, tcase.strict) == tcase.expectSvcInfo)
+			test.Assert(t, svcs.SearchService(tcase.serviceName, tcase.methodName, tcase.strict, serviceinfo.Thrift) == tcase.expectSvcInfo)
 		}
 	}
 }
