@@ -38,12 +38,12 @@ func TestJsonThriftCodec(t *testing.T) {
 	defer jtc.Close()
 	test.Assert(t, jtc.Name() == "JSONThrift")
 
-	method, err := jtc.getMethod(nil, "Test")
+	method, err := jtc.getMethod("Test")
 	test.Assert(t, err == nil)
-	test.Assert(t, method.Name == "Test")
 	test.Assert(t, method.StreamingMode == serviceinfo.StreamingNone)
-	test.Assert(t, jtc.svcName == "Mock")
-	test.Assert(t, jtc.extra[CombineServiceKey] == "false")
+	test.Assert(t, jtc.svcName.Load().(string) == "Mock")
+	isCombineService, _ := jtc.combineService.Load().(bool)
+	test.Assert(t, !isCombineService)
 
 	rw := jtc.getMessageReaderWriter()
 	_, ok := rw.(*thrift.JSONReaderWriter)
@@ -67,11 +67,11 @@ func TestJsonThriftCodecWithDynamicGo(t *testing.T) {
 	defer jtc.Close()
 	test.Assert(t, jtc.Name() == "JSONThrift")
 
-	method, err := jtc.getMethod(nil, "Test")
+	method, err := jtc.getMethod("Test")
 	test.Assert(t, err == nil)
-	test.Assert(t, method.Name == "Test")
 	test.Assert(t, method.StreamingMode == serviceinfo.StreamingNone)
-	test.Assert(t, jtc.extra[CombineServiceKey] == "false")
+	isCombineService, _ := jtc.combineService.Load().(bool)
+	test.Assert(t, !isCombineService)
 
 	rw := jtc.getMessageReaderWriter()
 	_, ok := rw.(*thrift.JSONReaderWriter)
@@ -105,9 +105,8 @@ func TestJsonThriftCodec_SelfRef(t *testing.T) {
 		defer jtc.Close()
 		test.Assert(t, jtc.Name() == "JSONThrift")
 
-		method, err := jtc.getMethod(nil, "Test")
+		method, err := jtc.getMethod("Test")
 		test.Assert(t, err == nil)
-		test.Assert(t, method.Name == "Test")
 		test.Assert(t, method.StreamingMode == serviceinfo.StreamingNone)
 
 		rw := jtc.getMessageReaderWriter()
@@ -125,11 +124,10 @@ func TestJsonThriftCodec_SelfRef(t *testing.T) {
 		defer jtc.Close()
 		test.Assert(t, jtc.Name() == "JSONThrift")
 
-		method, err := jtc.getMethod(nil, "Test")
+		method, err := jtc.getMethod("Test")
 		test.Assert(t, err == nil)
-		test.Assert(t, method.Name == "Test")
 		test.Assert(t, method.StreamingMode == serviceinfo.StreamingNone)
-		test.Assert(t, jtc.svcName == "Mock")
+		test.Assert(t, jtc.svcName.Load().(string) == "Mock")
 
 		rw := jtc.getMessageReaderWriter()
 		_, ok := rw.(thrift.MessageWriter)

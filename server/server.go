@@ -59,9 +59,8 @@ type Server interface {
 }
 
 type server struct {
-	opt           *internal_server.Options
-	svcs          *services
-	targetSvcInfo *serviceinfo.ServiceInfo
+	opt  *internal_server.Options
+	svcs *services
 
 	// actual rpc service implement of biz
 	eps     endpoint.Endpoint
@@ -196,9 +195,6 @@ func (s *server) RegisterService(svcInfo *serviceinfo.ServiceInfo, handler inter
 	if handler == nil || reflect.ValueOf(handler).IsNil() {
 		panic("handler is nil. please specify non-nil handler")
 	}
-	if s.svcs.svcMap[svcInfo.ServiceName] != nil {
-		panic(fmt.Sprintf("Service[%s] is already defined", svcInfo.ServiceName))
-	}
 
 	registerOpts := internal_server.NewRegisterOptions(opts)
 	// register service
@@ -209,7 +205,7 @@ func (s *server) RegisterService(svcInfo *serviceinfo.ServiceInfo, handler inter
 }
 
 func (s *server) GetServiceInfos() map[string]*serviceinfo.ServiceInfo {
-	return s.svcs.getSvcInfoMap()
+	return s.svcs.getKnownSvcInfoMap()
 }
 
 // Run runs the server.
@@ -221,11 +217,6 @@ func (s *server) Run() (err error) {
 	if err = s.check(); err != nil {
 		return err
 	}
-	s.findAndSetDefaultService()
-	diagnosis.RegisterProbeFunc(s.opt.DebugService, diagnosis.ServiceInfosKey, diagnosis.WrapAsProbeFunc(s.svcs.getSvcInfoMap()))
-	if s.svcs.fallbackSvc != nil {
-		diagnosis.RegisterProbeFunc(s.opt.DebugService, diagnosis.FallbackServiceKey, diagnosis.WrapAsProbeFunc(s.svcs.fallbackSvc.svcInfo.ServiceName))
-	}
 	svrCfg := s.opt.RemoteOpt
 	addr := svrCfg.Address // should not be nil
 	if s.opt.Proxy != nil {
@@ -235,6 +226,7 @@ func (s *server) Run() (err error) {
 		}
 	}
 
+	s.registerDebugInfo()
 	s.fillMoreServiceInfo(s.opt.RemoteOpt.Address)
 	s.richRemoteOption()
 	transHdlr, err := s.newSvrTransHandler()
@@ -314,7 +306,7 @@ func (s *server) Stop() (err error) {
 
 func (s *server) buildServiceMiddleware() endpoint.Middleware {
 	hasServiceMW := false
-	for _, svc := range s.svcs.svcMap {
+	for _, svc := range s.svcs.knownSvcMap {
 		if svc.MW != nil {
 			hasServiceMW = true
 			break
@@ -327,7 +319,7 @@ func (s *server) buildServiceMiddleware() endpoint.Middleware {
 		return func(ctx context.Context, req, resp interface{}) (err error) {
 			ri := rpcinfo.GetRPCInfo(ctx)
 			serviceName := ri.Invocation().ServiceName()
-			svc := s.svcs.svcMap[serviceName]
+			svc := s.svcs.knownSvcMap[serviceName]
 			if svc != nil && svc.MW != nil {
 				next = svc.MW(next)
 			}
@@ -383,7 +375,7 @@ func (s *server) invokeHandleEndpoint() endpoint.UnaryEndpoint {
 		ink := ri.Invocation()
 		methodName := ink.MethodName()
 		serviceName := ink.ServiceName()
-		svc := s.svcs.svcMap[serviceName]
+		svc := s.svcs.getService(serviceName)
 		svcInfo := svc.svcInfo
 		if methodName == "" && svcInfo.ServiceName != serviceinfo.GenericService {
 			return errors.New("method name is empty in rpcinfo, should not happen")
@@ -406,7 +398,7 @@ func (s *server) invokeHandleEndpoint() endpoint.UnaryEndpoint {
 		rpcinfo.Record(ctx, ri, stats.ServerHandleStart, nil)
 		// set session
 		backup.BackupCtx(ctx)
-		err = implHandlerFunc(ctx, svc.handler, args, resp)
+		err = implHandlerFunc(ctx, svc.getHandler(methodName), args, resp)
 		if err != nil {
 			if bizErr, ok := kerrors.FromBizStatusError(err); ok {
 				if setter, ok := ri.Invocation().(rpcinfo.InvocationSetter); ok {
@@ -426,7 +418,7 @@ func (s *server) streamHandleEndpoint() sep.StreamEndpoint {
 		ink := ri.Invocation()
 		methodName := ink.MethodName()
 		serviceName := ink.ServiceName()
-		svc := s.svcs.svcMap[serviceName]
+		svc := s.svcs.getService(serviceName)
 		svcInfo := svc.svcInfo
 		if methodName == "" && svcInfo.ServiceName != serviceinfo.GenericService {
 			return errors.New("method name is empty in rpcinfo, should not happen")
@@ -461,7 +453,7 @@ func (s *server) streamHandleEndpoint() sep.StreamEndpoint {
 				}
 			}
 		}
-		err = implHandlerFunc(ctx, svc.handler, args, nil)
+		err = implHandlerFunc(ctx, svc.getHandler(methodName), args, nil)
 		if err != nil {
 			if bizErr, ok := kerrors.FromBizStatusError(err); ok {
 				if setter, ok := ri.Invocation().(rpcinfo.InvocationSetter); ok {
@@ -477,7 +469,7 @@ func (s *server) streamHandleEndpoint() sep.StreamEndpoint {
 
 func (s *server) initBasicRemoteOption() {
 	remoteOpt := s.opt.RemoteOpt
-	remoteOpt.TargetSvcInfo = s.targetSvcInfo
+	remoteOpt.TargetSvcInfo = s.svcs.getTargetSvcInfo()
 	remoteOpt.SvcSearcher = s.svcs
 	remoteOpt.InitOrResetRPCInfoFunc = s.initOrResetRPCInfoFunc()
 	remoteOpt.TracerCtl = s.opt.TracerCtl
@@ -631,7 +623,9 @@ func (s *server) buildRegistryInfo(lAddr net.Addr) {
 		info.ServiceName = s.opt.Svr.ServiceName
 	}
 	if info.PayloadCodec == "" {
-		info.PayloadCodec = getDefaultSvcInfo(s.svcs).PayloadCodec.String()
+		if svc := s.svcs.getTargetSvcInfo(); svc != nil {
+			info.PayloadCodec = svc.PayloadCodec.String()
+		}
 	}
 	if info.Weight == 0 {
 		info.Weight = discovery.DefaultWeight
@@ -641,8 +635,18 @@ func (s *server) buildRegistryInfo(lAddr net.Addr) {
 	}
 }
 
+func (s *server) registerDebugInfo() {
+	diagnosis.RegisterProbeFunc(s.opt.DebugService, diagnosis.ServiceInfosKey, diagnosis.WrapAsProbeFunc(s.svcs.getKnownSvcInfoMap()))
+	if s.svcs.fallbackSvc != nil {
+		diagnosis.RegisterProbeFunc(s.opt.DebugService, diagnosis.FallbackServiceKey, diagnosis.WrapAsProbeFunc(s.svcs.fallbackSvc.svcInfo.ServiceName))
+	}
+	if s.svcs.unknownSvc != nil {
+		diagnosis.RegisterProbeFunc(s.opt.DebugService, diagnosis.UnknownServiceKey, diagnosis.WrapAsProbeFunc(nil))
+	}
+}
+
 func (s *server) fillMoreServiceInfo(lAddr net.Addr) {
-	for _, svc := range s.svcs.svcMap {
+	for _, svc := range s.svcs.knownSvcMap {
 		ni := *svc.svcInfo
 		si := &ni
 		extra := make(map[string]interface{}, len(si.Extra)+2)
@@ -676,21 +680,4 @@ func (s *server) waitExit(errCh chan error) error {
 			s.Unlock()
 		}
 	}
-}
-
-func (s *server) findAndSetDefaultService() {
-	if len(s.svcs.svcMap) == 1 {
-		s.targetSvcInfo = getDefaultSvcInfo(s.svcs)
-	}
-}
-
-// getDefaultSvc is used to get one ServiceInfo from map
-func getDefaultSvcInfo(svcs *services) *serviceinfo.ServiceInfo {
-	if len(svcs.svcMap) > 1 && svcs.fallbackSvc != nil {
-		return svcs.fallbackSvc.svcInfo
-	}
-	for _, svc := range svcs.svcMap {
-		return svc.svcInfo
-	}
-	return nil
 }
