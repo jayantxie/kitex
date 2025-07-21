@@ -180,6 +180,38 @@ func TestAddService(t *testing.T) {
 			expectErr:     false,
 			serviceName:   "xxxxxx",
 			methodName:    mocks.MockExceptionMethod,
+			expectSvcInfo: nil,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo:           mocks.ServiceInfo(),
+					isFallbackService: true,
+				},
+				{
+					svcInfo:           mocks.Service3Info(),
+					isFallbackService: false,
+				},
+			},
+			expectErr:     false,
+			serviceName:   serviceinfo.GenericService,
+			methodName:    mocks.MockExceptionMethod,
+			expectSvcInfo: mocks.ServiceInfo(),
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo:           mocks.ServiceInfo(),
+					isFallbackService: true,
+				},
+				{
+					svcInfo:           mocks.Service3Info(),
+					isFallbackService: false,
+				},
+			},
+			expectErr:     false,
+			serviceName:   serviceinfo.CombineService,
+			methodName:    mocks.MockExceptionMethod,
 			expectSvcInfo: mocks.ServiceInfo(),
 		},
 		{
@@ -199,16 +231,16 @@ func TestAddService(t *testing.T) {
 			expectSvcInfo: nil,
 		},
 	}
-	for _, tcase := range testcases {
+	for i, tcase := range testcases {
 		svcs := newServices()
 		for _, svc := range tcase.svcs {
 			svcs.addService(svc.svcInfo, mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: svc.isFallbackService})
 		}
 		if tcase.expectErr {
-			test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) != nil)
+			test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) != nil, i)
 		} else {
 			test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) == nil)
-			test.Assert(t, svcs.SearchService(tcase.serviceName, tcase.methodName, tcase.strict, serviceinfo.Thrift) == tcase.expectSvcInfo)
+			test.Assert(t, svcs.SearchService(tcase.serviceName, tcase.methodName, tcase.strict, serviceinfo.Thrift) == tcase.expectSvcInfo, i)
 		}
 	}
 }

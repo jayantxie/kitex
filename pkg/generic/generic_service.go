@@ -26,8 +26,6 @@ import (
 	"github.com/cloudwego/kitex/pkg/streaming"
 )
 
-const isBinaryThriftGenericV1Key = "isBinaryThriftGenericV1"
-
 var (
 	errGenericCallNotImplemented     = errors.New("generic.ServiceV2 GenericCall not implemented")
 	errClientStreamingNotImplemented = errors.New("generic.ServiceV2 ClientStreaming not implemented")
@@ -96,9 +94,6 @@ func ServiceInfoWithGeneric(g Generic) *serviceinfo.ServiceInfo {
 	if pkg, _ := g.GetExtra(serviceinfo.PackageName).(string); pkg != "" {
 		svcInfo.Extra[serviceinfo.PackageName] = pkg
 	}
-	if pc := g.GetExtra(BinaryThriftGenericV1PayloadCodecKey); pc != nil {
-		svcInfo.Extra[isBinaryThriftGenericV1Key] = g.GetExtra(isBinaryThriftGenericV1Key)
-	}
 	return svcInfo
 }
 
@@ -133,12 +128,6 @@ func RegisterBinaryGenericMethodFunc(svcInfo *serviceinfo.ServiceInfo) *servicei
 		return &nSvcInfo
 	}
 	return svcInfo
-}
-
-// IsBinaryThriftGenericV1 check if the service info uses binary thrift generic v1.
-func IsBinaryThriftGenericV1(svcInfo *serviceinfo.ServiceInfo) bool {
-	v, _ := svcInfo.Extra[isBinaryThriftGenericV1Key].(bool)
-	return v
 }
 
 func callHandler(ctx context.Context, handler, arg, result interface{}) error {

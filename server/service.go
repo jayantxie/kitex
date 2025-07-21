@@ -29,6 +29,7 @@ import (
 )
 
 var (
+	// set generic streaming mode to -1, which means not allow binary generic fallback.
 	notAllowBinaryGenericCtx = igeneric.WithGenericStreamingMode(context.Background(), serviceinfo.StreamingMode(-1))
 )
 
@@ -102,10 +103,12 @@ func (u *unknownService) getOrStoreSvc(svcName string, codecType serviceinfo.Pay
 }
 
 type services struct {
-	methodSvcsMap map[string][]*service // key: method name, only effective to generated code
-	knownSvcMap   map[string]*service   // key: service name
-	fallbackSvc   *service
-	unknownSvc    *unknownService
+	knownSvcMap     map[string]*service // key: service name
+	nonFallbackSvcs []*service
+
+	fallbackSvc *service
+
+	unknownSvc *unknownService
 
 	// be compatible with binary thrift generic v1
 	binaryThriftGenericV1SvcInfo *serviceinfo.ServiceInfo
@@ -115,8 +118,7 @@ type services struct {
 
 func newServices() *services {
 	return &services{
-		methodSvcsMap: map[string][]*service{},
-		knownSvcMap:   map[string]*service{},
+		knownSvcMap: map[string]*service{},
 	}
 }
 
@@ -147,15 +149,8 @@ func (s *services) addService(svcInfo *serviceinfo.ServiceInfo, handler interfac
 		return fmt.Errorf("service [%s] has already been registered", svcInfo.ServiceName)
 	}
 	s.knownSvcMap[svcInfo.ServiceName] = svc
-	// method search map
-	for methodName := range svcInfo.Methods {
-		svcs := s.methodSvcsMap[methodName]
-		if registerOpts.IsFallbackService {
-			svcs = append([]*service{svc}, svcs...)
-		} else {
-			svcs = append(svcs, svc)
-		}
-		s.methodSvcsMap[methodName] = svcs
+	if !registerOpts.IsFallbackService {
+		s.nonFallbackSvcs = append(s.nonFallbackSvcs, svc)
 	}
 	return nil
 }
@@ -169,18 +164,25 @@ func (s *services) getKnownSvcInfoMap() map[string]*serviceinfo.ServiceInfo {
 }
 
 func (s *services) check(refuseTrafficWithoutServiceName bool) error {
-	if !s.hasRegisteredService() {
+	if len(s.knownSvcMap) == 0 && s.unknownSvc == nil {
 		return errors.New("run: no service. Use RegisterService to set one")
 	}
 	for _, svc := range s.knownSvcMap {
-		// special treatment for binary thrift generic v1
-		if generic.IsBinaryThriftGenericV1(svc.svcInfo) {
+		// special treatment for binary thrift generic v1, it doesn't support multi services.
+		if svc.svcInfo.ServiceName == serviceinfo.GenericService {
 			s.binaryThriftGenericV1SvcInfo = svc.svcInfo
-			break
+			if len(s.knownSvcMap) > 1 {
+				return fmt.Errorf("binary thrift generic v1 doesn't support multi services")
+			}
+			if s.unknownSvc != nil {
+				return fmt.Errorf("binary thrift generic v1 doesn't support unknown service")
+			}
+			return nil
 		}
 	}
 	if s.unknownSvc != nil {
 		for _, svc := range s.knownSvcMap {
+			// register binary fallback method for every service info
 			svc.svcInfo = generic.RegisterBinaryGenericMethodFunc(svc.svcInfo)
 			svc.unknownMethodHandler = s.unknownSvc.handler
 		}
@@ -189,9 +191,20 @@ func (s *services) check(refuseTrafficWithoutServiceName bool) error {
 		s.refuseTrafficWithoutServiceName = true
 		return nil
 	}
-	for name, svcs := range s.methodSvcsMap {
-		if len(svcs) > 1 && svcs[0] != s.fallbackSvc {
-			return fmt.Errorf("method name [%s] is conflicted between services but no fallback service is specified", name)
+	// checking whether conflicting methods have fallback service
+	fallbackCheckingMap := make(map[string]int)
+	for _, svc := range s.knownSvcMap {
+		for method := range svc.svcInfo.Methods {
+			if svc == s.fallbackSvc {
+				fallbackCheckingMap[method] = -1
+			} else if num := fallbackCheckingMap[method]; num >= 0 {
+				fallbackCheckingMap[method] = num + 1
+			}
+		}
+	}
+	for methodName, serviceNum := range fallbackCheckingMap {
+		if serviceNum > 1 {
+			return fmt.Errorf("method name [%s] is conflicted between services but no fallback service is specified", methodName)
 		}
 	}
 	return nil
@@ -207,76 +220,55 @@ func (s *services) getService(svcName string) *service {
 	return nil
 }
 
-func (s *services) SearchService(svcName, methodName string, strict bool, codecType serviceinfo.PayloadCodec) *serviceinfo.ServiceInfo {
-	if strict {
-		if svc := s.knownSvcMap[svcName]; svc != nil {
+func (s *services) searchByMethodName(methodName string) *serviceinfo.ServiceInfo {
+	if s.fallbackSvc != nil {
+		// check whether fallback service has the method
+		if mi := s.fallbackSvc.svcInfo.MethodInfo(notAllowBinaryGenericCtx, methodName); mi != nil {
+			return s.fallbackSvc.svcInfo
+		}
+	}
+	// check other services
+	for _, svc := range s.nonFallbackSvcs {
+		if mi := svc.svcInfo.MethodInfo(notAllowBinaryGenericCtx, methodName); mi != nil {
 			return svc.svcInfo
 		}
-		if s.unknownSvc != nil {
-			return s.unknownSvc.getOrStoreSvc(svcName, codecType).svcInfo
-		}
-		return nil
 	}
+	return nil
+}
+
+func (s *services) SearchService(svcName, methodName string, strict bool, codecType serviceinfo.PayloadCodec) *serviceinfo.ServiceInfo {
 	if s.binaryThriftGenericV1SvcInfo != nil {
 		// be compatible with binary thrift generic
 		return s.binaryThriftGenericV1SvcInfo
 	}
-	if s.refuseTrafficWithoutServiceName {
+	if strict || s.refuseTrafficWithoutServiceName {
 		if svc := s.knownSvcMap[svcName]; svc != nil {
 			return svc.svcInfo
 		}
-		if s.unknownSvc != nil {
-			return s.unknownSvc.getOrStoreSvc(svcName, codecType).svcInfo
-		}
-		return nil
-	}
-	var svc *service
-	if svcName == "" {
-		if svcs := s.methodSvcsMap[methodName]; len(svcs) > 0 {
-			svc = svcs[0]
-		} else {
-			// json/map generic don't expose methods map because they support dynamic updating,
-			// so we can only use MethodInfo to search, and disable binary generic lookup to
-			// prevent finding binary methods when the unknown handler is enabled.
-			for _, _svc := range s.knownSvcMap {
-				mi := _svc.svcInfo.MethodInfo(notAllowBinaryGenericCtx, methodName)
-				if mi != nil {
-					svc = _svc
-					break
-				}
-			}
-		}
 	} else {
-		svc = s.knownSvcMap[svcName]
-		if svc == nil {
-			// maybe combine or generic service name, TODO: remove this logic
-			svcs := s.methodSvcsMap[methodName]
-			if len(svcs) > 0 {
-				if len(svcs) == 1 || svcName[0] == '$' {
-					svc = svcs[0]
-				}
-			} else {
-				for _, _svc := range s.knownSvcMap {
-					mi := _svc.svcInfo.MethodInfo(notAllowBinaryGenericCtx, methodName)
-					if mi != nil {
-						svc = _svc
-						break
-					}
+		if svcName == "" {
+			// for non ttheader traffic, service name might be empty, we must fall back to method searching.
+			if svcInfo := s.searchByMethodName(methodName); svcInfo != nil {
+				return svcInfo
+			}
+		} else {
+			if svc := s.knownSvcMap[svcName]; svc != nil {
+				return svc.svcInfo
+			}
+			if svcName == serviceinfo.GenericService || svcName == serviceinfo.CombineService {
+				// Maybe combine or generic service name,
+				// because Kitex client will write these two service name if the version is between v0.9.0-v0.9.1
+				// TODO: remove this logic if this version range is converged
+				if svcInfo := s.searchByMethodName(methodName); svcInfo != nil {
+					return svcInfo
 				}
 			}
 		}
-	}
-	if svc != nil {
-		return svc.svcInfo
 	}
 	if s.unknownSvc != nil {
 		return s.unknownSvc.getOrStoreSvc(svcName, codecType).svcInfo
 	}
 	return nil
-}
-
-func (s *services) hasRegisteredService() bool {
-	return len(s.knownSvcMap) > 0 || s.unknownSvc != nil
 }
 
 // getTargetSvcInfo returns the service info if there is only one service registered.
