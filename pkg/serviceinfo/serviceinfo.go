@@ -69,9 +69,8 @@ type ServiceInfo struct {
 	Extra map[string]interface{}
 
 	// GenericMethod returns a MethodInfo for the given context.
-	// If it fails to obtain MethodInfo from Methods map, it will fallback to
-	// calling this function to obtain MethodInfo, generally used for binary generic
-	// or unknown method traffic capture.
+	// If it fails to obtain MethodInfo from Methods map, it will call
+	// this function to obtain MethodInfo.
 	GenericMethod GenericMethodFunc
 }
 

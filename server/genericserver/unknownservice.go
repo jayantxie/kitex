@@ -26,11 +26,6 @@ import (
 	"github.com/cloudwego/kitex/server"
 )
 
-var (
-	errPingPongUnknownHandlerNotRegistered  = errors.New("PingPongUnknownHandler not registered")
-	errStreamingUnknownHandlerNotRegistered = errors.New("StreamingUnknownHandler not registered")
-)
-
 // RegisterUnknownServiceOrMethodHandler registers a service handler for unknown service or method traffic.
 //
 // After invoking this interface, the impact on server traffic processing is as follows:
@@ -80,7 +75,10 @@ func NewUnknownServiceOrMethodServer(unknownHandler *UnknownServiceOrMethodHandl
 	return svr
 }
 
+// UnknownServiceOrMethodHandler handles unknown service or method traffic.
 type UnknownServiceOrMethodHandler struct {
-	PingPongHandler  func(ctx context.Context, service, method string, request interface{}) (response interface{}, err error)
+	// optional, handle ttheader/framed traffic, support both thrift binary and protobuf binary
+	PingPongHandler func(ctx context.Context, service, method string, request interface{}) (response interface{}, err error)
+	// optional, handle grpc/ttstream traffic (include grpc unary), support both thrift binary and protobuf binary
 	StreamingHandler func(ctx context.Context, service, method string, stream generic.BidiStreamingServer) (err error)
 }

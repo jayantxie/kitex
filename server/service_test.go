@@ -21,13 +21,15 @@ import (
 
 	"github.com/cloudwego/kitex/internal/mocks"
 	"github.com/cloudwego/kitex/internal/test"
+	"github.com/cloudwego/kitex/pkg/generic"
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
 )
 
-func TestAddService(t *testing.T) {
+func TestSearchService(t *testing.T) {
 	type svc struct {
 		svcInfo           *serviceinfo.ServiceInfo
 		isFallbackService bool
+		isUnknownService  bool
 	}
 	testcases := []struct {
 		svcs                            []svc
@@ -36,8 +38,6 @@ func TestAddService(t *testing.T) {
 		serviceName, methodName string
 		strict                  bool
 		expectSvcInfo           *serviceinfo.ServiceInfo
-
-		expectErr bool
 	}{
 		{
 			svcs: []svc{
@@ -46,28 +46,10 @@ func TestAddService(t *testing.T) {
 					isFallbackService: false,
 				},
 				{
-					svcInfo:           mocks.Service2Info(),
-					isFallbackService: true,
-				},
-				{
-					svcInfo:           mocks.Service3Info(),
-					isFallbackService: false,
-				},
-			},
-			expectErr: true,
-		},
-		{
-			svcs: []svc{
-				{
-					svcInfo:           mocks.ServiceInfo(),
-					isFallbackService: false,
-				},
-				{
 					svcInfo:           mocks.Service3Info(),
 					isFallbackService: true,
 				},
 			},
-			expectErr:     false,
 			serviceName:   mocks.MockServiceName,
 			methodName:    mocks.MockMethod,
 			expectSvcInfo: mocks.ServiceInfo(),
@@ -83,7 +65,6 @@ func TestAddService(t *testing.T) {
 					isFallbackService: true,
 				},
 			},
-			expectErr:     false,
 			serviceName:   "",
 			methodName:    mocks.MockMethod,
 			expectSvcInfo: mocks.Service3Info(),
@@ -99,7 +80,6 @@ func TestAddService(t *testing.T) {
 					isFallbackService: false,
 				},
 			},
-			expectErr:     false,
 			serviceName:   mocks.MockService3Name,
 			methodName:    mocks.MockMethod,
 			expectSvcInfo: mocks.Service3Info(),
@@ -115,7 +95,6 @@ func TestAddService(t *testing.T) {
 					isFallbackService: false,
 				},
 			},
-			expectErr:     false,
 			serviceName:   "",
 			methodName:    mocks.MockMethod,
 			expectSvcInfo: mocks.ServiceInfo(),
@@ -131,21 +110,7 @@ func TestAddService(t *testing.T) {
 					isFallbackService: false,
 				},
 			},
-			expectErr: true,
-		},
-		{
-			svcs: []svc{
-				{
-					svcInfo:           mocks.ServiceInfo(),
-					isFallbackService: false,
-				},
-				{
-					svcInfo:           mocks.Service3Info(),
-					isFallbackService: false,
-				},
-			},
 			refuseTrafficWithoutServiceName: true,
-			expectErr:                       false,
 			serviceName:                     "",
 			methodName:                      mocks.MockMethod,
 			expectSvcInfo:                   nil,
@@ -161,7 +126,6 @@ func TestAddService(t *testing.T) {
 					isFallbackService: false,
 				},
 			},
-			expectErr:     false,
 			serviceName:   serviceinfo.GenericService,
 			methodName:    mocks.MockMethod,
 			expectSvcInfo: mocks.ServiceInfo(),
@@ -177,7 +141,6 @@ func TestAddService(t *testing.T) {
 					isFallbackService: false,
 				},
 			},
-			expectErr:     false,
 			serviceName:   "xxxxxx",
 			methodName:    mocks.MockExceptionMethod,
 			expectSvcInfo: nil,
@@ -193,7 +156,6 @@ func TestAddService(t *testing.T) {
 					isFallbackService: false,
 				},
 			},
-			expectErr:     false,
 			serviceName:   serviceinfo.GenericService,
 			methodName:    mocks.MockExceptionMethod,
 			expectSvcInfo: mocks.ServiceInfo(),
@@ -209,7 +171,6 @@ func TestAddService(t *testing.T) {
 					isFallbackService: false,
 				},
 			},
-			expectErr:     false,
 			serviceName:   serviceinfo.CombineService,
 			methodName:    mocks.MockExceptionMethod,
 			expectSvcInfo: mocks.ServiceInfo(),
@@ -225,30 +186,210 @@ func TestAddService(t *testing.T) {
 					isFallbackService: false,
 				},
 			},
-			expectErr:     false,
 			serviceName:   "xxxxxx",
 			methodName:    mocks.MockMethod,
 			expectSvcInfo: nil,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: generic.ServiceInfoWithGeneric(generic.BinaryThriftGeneric()),
+				},
+			},
+			serviceName:   "xxxxxx",
+			methodName:    mocks.MockMethod,
+			expectSvcInfo: generic.ServiceInfoWithGeneric(generic.BinaryThriftGeneric()),
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: mocks.ServiceInfo(),
+				},
+				{
+					isUnknownService: true,
+				},
+			},
+			serviceName:   mocks.MockServiceName,
+			methodName:    mocks.MockMethod,
+			expectSvcInfo: mocks.ServiceInfo(),
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: mocks.ServiceInfo(),
+				},
+				{
+					svcInfo: mocks.Service2Info(),
+				},
+			},
+			strict:        true,
+			serviceName:   mocks.MockServiceName,
+			methodName:    mocks.MockMethod,
+			expectSvcInfo: mocks.ServiceInfo(),
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: mocks.ServiceInfo(),
+				},
+				{
+					isUnknownService: true,
+				},
+			},
+			strict:        true,
+			serviceName:   "xxxxxx",
+			methodName:    mocks.MockMethod,
+			expectSvcInfo: &serviceinfo.ServiceInfo{ServiceName: "xxxxxx"},
 		},
 	}
 	for i, tcase := range testcases {
 		svcs := newServices()
 		for _, svc := range tcase.svcs {
-			svcs.addService(svc.svcInfo, mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: svc.isFallbackService})
+			svcs.addService(svc.svcInfo, mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: svc.isFallbackService, IsUnknownService: svc.isUnknownService})
 		}
-		if tcase.expectErr {
-			test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) != nil, i)
+		test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) == nil)
+		svcInfo := svcs.SearchService(tcase.serviceName, tcase.methodName, tcase.strict, serviceinfo.Thrift)
+		if tcase.expectSvcInfo == nil {
+			test.Assert(t, svcInfo == nil, i)
 		} else {
-			test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) == nil)
-			test.Assert(t, svcs.SearchService(tcase.serviceName, tcase.methodName, tcase.strict, serviceinfo.Thrift) == tcase.expectSvcInfo, i)
+			test.Assert(t, svcInfo.ServiceName == tcase.expectSvcInfo.ServiceName, i)
 		}
 	}
 }
 
-func TestCheckMultipleFallbackService(t *testing.T) {
-	svcs := newServices()
-	_ = svcs.addService(mocks.ServiceInfo(), mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: true})
-	err := svcs.addService(mocks.ServiceInfo(), mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: true})
-	test.Assert(t, err != nil)
-	test.Assert(t, err.Error() == "multiple fallback services cannot be registered. [MockService] is already registered as a fallback service", err)
+func TestAddService(t *testing.T) {
+	type svc struct {
+		svcInfo           *serviceinfo.ServiceInfo
+		isFallbackService bool
+		isUnknownService  bool
+	}
+	testcases := []struct {
+		svcs            []svc
+		expectAddSvcErr bool
+	}{
+		{
+			svcs: []svc{
+				{
+					isUnknownService: true,
+				},
+				{
+					isUnknownService: true,
+				},
+			},
+			expectAddSvcErr: true,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo:           mocks.ServiceInfo(),
+					isFallbackService: true,
+				},
+				{
+					svcInfo:           mocks.Service3Info(),
+					isFallbackService: true,
+				},
+			},
+			expectAddSvcErr: true,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo:           mocks.ServiceInfo(),
+					isFallbackService: true,
+				},
+				{
+					svcInfo: mocks.ServiceInfo(),
+				},
+			},
+			expectAddSvcErr: true,
+		},
+	}
+	for i, tcase := range testcases {
+		svcs := newServices()
+		var hasAddErr bool
+		for _, svc := range tcase.svcs {
+			err := svcs.addService(svc.svcInfo, mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: svc.isFallbackService, IsUnknownService: svc.isUnknownService})
+			if err != nil {
+				hasAddErr = true
+			}
+		}
+		test.Assert(t, tcase.expectAddSvcErr == hasAddErr, i)
+	}
+}
+
+func TestCheckService(t *testing.T) {
+	type svc struct {
+		svcInfo           *serviceinfo.ServiceInfo
+		isFallbackService bool
+		isUnknownService  bool
+	}
+	testcases := []struct {
+		svcs                            []svc
+		refuseTrafficWithoutServiceName bool
+		expectCheckErr                  bool
+	}{
+		{
+			svcs:           nil,
+			expectCheckErr: true,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo:           mocks.ServiceInfo(),
+					isFallbackService: false,
+				},
+				{
+					svcInfo:           mocks.Service2Info(),
+					isFallbackService: true,
+				},
+				{
+					svcInfo:           mocks.Service3Info(),
+					isFallbackService: false,
+				},
+			},
+			expectCheckErr: true,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo:           mocks.ServiceInfo(),
+					isFallbackService: false,
+				},
+				{
+					svcInfo:           mocks.Service3Info(),
+					isFallbackService: false,
+				},
+			},
+			expectCheckErr: true,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: generic.ServiceInfoWithGeneric(generic.BinaryThriftGeneric()),
+				},
+				{
+					svcInfo: mocks.ServiceInfo(),
+				},
+			},
+			expectCheckErr: true,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: generic.ServiceInfoWithGeneric(generic.BinaryThriftGeneric()),
+				},
+				{
+					isUnknownService: true,
+				},
+			},
+			expectCheckErr: true,
+		},
+	}
+	for i, tcase := range testcases {
+		svcs := newServices()
+		for _, svc := range tcase.svcs {
+			svcs.addService(svc.svcInfo, mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: svc.isFallbackService, IsUnknownService: svc.isUnknownService})
+		}
+		test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) != nil == tcase.expectCheckErr, i)
+	}
 }

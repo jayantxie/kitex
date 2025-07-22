@@ -191,7 +191,9 @@ func (s *services) check(refuseTrafficWithoutServiceName bool) error {
 		s.refuseTrafficWithoutServiceName = true
 		return nil
 	}
-	// checking whether conflicting methods have fallback service
+	// Checking whether conflicting methods have fallback service.
+	// It can only check service info for generated code, but not for generic services such as json/map,
+	// because Methods map of generic services are empty.
 	fallbackCheckingMap := make(map[string]int)
 	for _, svc := range s.knownSvcMap {
 		for method := range svc.svcInfo.Methods {
@@ -227,7 +229,7 @@ func (s *services) searchByMethodName(methodName string) *serviceinfo.ServiceInf
 			return s.fallbackSvc.svcInfo
 		}
 	}
-	// check other services
+	// match other services
 	for _, svc := range s.nonFallbackSvcs {
 		if mi := svc.svcInfo.MethodInfo(notAllowBinaryGenericCtx, methodName); mi != nil {
 			return svc.svcInfo
