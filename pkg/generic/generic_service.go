@@ -94,38 +94,8 @@ func ServiceInfoWithGeneric(g Generic) *serviceinfo.ServiceInfo {
 	if pkg, _ := g.GetExtra(serviceinfo.PackageName).(string); pkg != "" {
 		svcInfo.Extra[serviceinfo.PackageName] = pkg
 	}
-	return svcInfo
-}
-
-// RegisterBinaryGenericMethodFunc register binary generic method func to the given service info.
-// Note: It's not an interface exposed to users.
-func RegisterBinaryGenericMethodFunc(svcInfo *serviceinfo.ServiceInfo) *serviceinfo.ServiceInfo {
-	var g Generic
-	switch svcInfo.PayloadCodec {
-	case serviceinfo.Thrift:
-		g = BinaryThriftGenericV2(svcInfo.ServiceName)
-	case serviceinfo.Protobuf:
-		g = BinaryPbGeneric(svcInfo.ServiceName, svcInfo.GetPackageName())
-	default:
-	}
-	if g != nil {
-		nSvcInfo := *svcInfo
-		binaryGenericMethod := g.GenericMethod()
-		if oldGenericMethod := svcInfo.GenericMethod; oldGenericMethod != nil {
-			// If oldGenericMethod is not nil, it means the service info already has a generic method func,
-			// such as a service info created by json generic.
-			// We should wrap the old generic method func with the binary generic method func
-			nSvcInfo.GenericMethod = func(ctx context.Context, methodName string) serviceinfo.MethodInfo {
-				mi := oldGenericMethod(ctx, methodName)
-				if mi != nil {
-					return mi
-				}
-				return binaryGenericMethod(ctx, methodName)
-			}
-		} else {
-			nSvcInfo.GenericMethod = binaryGenericMethod
-		}
-		return &nSvcInfo
+	if isBinaryGeneric, _ := g.GetExtra(IsBinaryGeneric).(bool); isBinaryGeneric {
+		svcInfo.Extra[IsBinaryGeneric] = true
 	}
 	return svcInfo
 }

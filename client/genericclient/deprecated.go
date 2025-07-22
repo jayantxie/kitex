@@ -71,7 +71,7 @@ type deprecatedClientStreamingClient struct {
 
 func NewClientStreaming(ctx context.Context, genericCli Client, method string, callOpts ...callopt.Option) (ClientStreaming, error) {
 	gCli, ok := genericCli.(*genericServiceClient)
-	if ok && gCli.needMethodInfoContext {
+	if ok && gCli.isBinaryGeneric {
 		// To be compatible with binary generic calls, streaming mode must be passed in.
 		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingClient)
 	}
@@ -108,7 +108,7 @@ type deprecatedServerStreamingClient struct {
 
 func NewServerStreaming(ctx context.Context, genericCli Client, method string, req interface{}, callOpts ...callopt.Option) (ServerStreaming, error) {
 	gCli, ok := genericCli.(*genericServiceClient)
-	if ok && gCli.needMethodInfoContext {
+	if ok && gCli.isBinaryGeneric {
 		// To be compatible with binary generic calls, streaming mode must be passed in.
 		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingServer)
 	}
@@ -147,7 +147,7 @@ type deprecatedBidirectionalStreamingClient struct {
 
 func NewBidirectionalStreaming(ctx context.Context, genericCli Client, method string, callOpts ...callopt.Option) (BidirectionalStreaming, error) {
 	gCli, ok := genericCli.(*genericServiceClient)
-	if ok && gCli.needMethodInfoContext {
+	if ok && gCli.isBinaryGeneric {
 		// To be compatible with binary generic calls, streaming mode must be passed in.
 		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingBidirectional)
 	}

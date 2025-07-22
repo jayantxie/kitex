@@ -59,7 +59,7 @@ func NewClientWithServiceInfo(destService string, g generic.Generic, svcInfo *se
 		g:       g,
 	}
 	// binary generic need method info context
-	cli.needMethodInfoContext, _ = g.GetExtra(generic.NeedMethodInfoContextKey).(bool)
+	cli.isBinaryGeneric, _ = g.GetExtra(generic.IsBinaryGeneric).(bool)
 	// http generic get method name by request
 	cli.getMethodFunc, _ = g.GetExtra(generic.GetMethodNameByRequestFuncKey).(generic.GetMethodNameByRequestFunc)
 
@@ -82,17 +82,17 @@ type Client interface {
 }
 
 type genericServiceClient struct {
-	svcInfo               *serviceinfo.ServiceInfo
-	kClient               client.Client
-	sClient               client.Streaming
-	g                     generic.Generic
-	needMethodInfoContext bool
-	getMethodFunc         generic.GetMethodNameByRequestFunc
+	svcInfo         *serviceinfo.ServiceInfo
+	kClient         client.Client
+	sClient         client.Streaming
+	g               generic.Generic
+	isBinaryGeneric bool
+	getMethodFunc   generic.GetMethodNameByRequestFunc
 }
 
 func (gc *genericServiceClient) GenericCall(ctx context.Context, method string, request interface{}, callOptions ...callopt.Option) (response interface{}, err error) {
 	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
-	if gc.needMethodInfoContext {
+	if gc.isBinaryGeneric {
 		// To be compatible with binary generic calls, streaming mode must be passed in.
 		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingNone)
 	}
@@ -130,7 +130,7 @@ func (gc *genericServiceClient) Close() error {
 
 func (gc *genericServiceClient) ClientStreaming(ctx context.Context, method string, callOptions ...streamcall.Option) (ClientStreamingClient, error) {
 	ctx = client.NewCtxWithCallOptions(ctx, streamcall.GetCallOptions(callOptions))
-	if gc.needMethodInfoContext {
+	if gc.isBinaryGeneric {
 		// To be compatible with binary generic calls, streaming mode must be passed in.
 		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingClient)
 	}
@@ -144,7 +144,7 @@ func (gc *genericServiceClient) ClientStreaming(ctx context.Context, method stri
 
 func (gc *genericServiceClient) ServerStreaming(ctx context.Context, method string, req interface{}, callOptions ...streamcall.Option) (ServerStreamingClient, error) {
 	ctx = client.NewCtxWithCallOptions(ctx, streamcall.GetCallOptions(callOptions))
-	if gc.needMethodInfoContext {
+	if gc.isBinaryGeneric {
 		// To be compatible with binary generic calls, streaming mode must be passed in.
 		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingServer)
 	}
@@ -169,7 +169,7 @@ func (gc *genericServiceClient) ServerStreaming(ctx context.Context, method stri
 
 func (gc *genericServiceClient) BidirectionalStreaming(ctx context.Context, method string, callOptions ...streamcall.Option) (BidiStreamingClient, error) {
 	ctx = client.NewCtxWithCallOptions(ctx, streamcall.GetCallOptions(callOptions))
-	if gc.needMethodInfoContext {
+	if gc.isBinaryGeneric {
 		// To be compatible with binary generic calls, streaming mode must be passed in.
 		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingBidirectional)
 	}

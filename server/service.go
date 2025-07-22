@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	// set generic streaming mode to -1, which means not allow binary generic fallback.
+	// set generic streaming mode to -1, which means not allow method searching by binary generic.
 	notAllowBinaryGenericCtx = igeneric.WithGenericStreamingMode(context.Background(), serviceinfo.StreamingMode(-1))
 )
 
@@ -52,7 +52,7 @@ func (s *service) getHandler(methodName string) interface{} {
 	if s.unknownMethodHandler == nil {
 		return s.handler
 	}
-	if s.svcInfo.Methods[methodName] != nil {
+	if mi := s.svcInfo.MethodInfo(notAllowBinaryGenericCtx, methodName); mi != nil {
 		return s.handler
 	}
 	return s.unknownMethodHandler
@@ -91,7 +91,6 @@ func (u *unknownService) getOrStoreSvc(svcName string, codecType serviceinfo.Pay
 	case serviceinfo.Protobuf:
 		g = generic.BinaryPbGeneric(svcName, "")
 	default:
-		u.svcs[svcName] = nil
 		return nil
 	}
 	svc = &service{
@@ -183,8 +182,10 @@ func (s *services) check(refuseTrafficWithoutServiceName bool) error {
 	if s.unknownSvc != nil {
 		for _, svc := range s.knownSvcMap {
 			// register binary fallback method for every service info
-			svc.svcInfo = generic.RegisterBinaryGenericMethodFunc(svc.svcInfo)
-			svc.unknownMethodHandler = s.unknownSvc.handler
+			if nSvcInfo := registerBinaryGenericMethodFunc(svc.svcInfo); nSvcInfo != nil {
+				svc.svcInfo = nSvcInfo
+				svc.unknownMethodHandler = s.unknownSvc.handler
+			}
 		}
 	}
 	if refuseTrafficWithoutServiceName {
@@ -282,4 +283,38 @@ func (s *services) getTargetSvcInfo() *serviceinfo.ServiceInfo {
 		return svc.svcInfo
 	}
 	return nil
+}
+
+// registerBinaryGenericMethodFunc register binary generic method func to the given service info.
+func registerBinaryGenericMethodFunc(svcInfo *serviceinfo.ServiceInfo) *serviceinfo.ServiceInfo {
+	if isBinaryGeneric, _ := svcInfo.Extra[generic.IsBinaryGeneric].(bool); isBinaryGeneric {
+		// already binary generic, no need to register
+		return nil
+	}
+	var g generic.Generic
+	switch svcInfo.PayloadCodec {
+	case serviceinfo.Thrift:
+		g = generic.BinaryThriftGenericV2(svcInfo.ServiceName)
+	case serviceinfo.Protobuf:
+		g = generic.BinaryPbGeneric(svcInfo.ServiceName, svcInfo.GetPackageName())
+	default:
+		return nil
+	}
+	nSvcInfo := *svcInfo
+	binaryGenericMethod := g.GenericMethod()
+	if oldGenericMethod := svcInfo.GenericMethod; oldGenericMethod != nil {
+		// If oldGenericMethod is not nil, it means the service info already has a generic method func,
+		// such as a service info created by json generic.
+		// We should wrap the old generic method func with the binary generic method func
+		nSvcInfo.GenericMethod = func(ctx context.Context, methodName string) serviceinfo.MethodInfo {
+			mi := oldGenericMethod(ctx, methodName)
+			if mi != nil {
+				return mi
+			}
+			return binaryGenericMethod(ctx, methodName)
+		}
+	} else {
+		nSvcInfo.GenericMethod = binaryGenericMethod
+	}
+	return &nSvcInfo
 }
