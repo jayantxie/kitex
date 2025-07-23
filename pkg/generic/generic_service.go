@@ -19,18 +19,23 @@ package generic
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	igeneric "github.com/cloudwego/kitex/internal/generic"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
 	"github.com/cloudwego/kitex/pkg/streaming"
+	"github.com/cloudwego/kitex/transport"
 )
 
 var (
-	errGenericCallNotImplemented     = errors.New("generic.ServiceV2 GenericCall not implemented")
-	errClientStreamingNotImplemented = errors.New("generic.ServiceV2 ClientStreaming not implemented")
-	errServerStreamingNotImplemented = errors.New("generic.ServiceV2 ServerStreaming not implemented")
-	errBidiStreamingNotImplemented   = errors.New("generic.ServiceV2 BidiStreaming not implemented")
+	errGenericCallNotImplemented                     = errors.New("generic.ServiceV2 GenericCall not implemented")
+	errClientStreamingNotImplemented                 = errors.New("generic.ServiceV2 ClientStreaming not implemented")
+	errServerStreamingNotImplemented                 = errors.New("generic.ServiceV2 ServerStreaming not implemented")
+	errBidiStreamingNotImplemented                   = errors.New("generic.ServiceV2 BidiStreaming not implemented")
+	errDefaultHandlerOfUnknownHandlerNotImplemented  = errors.New("generic.UnknownServiceOrMethodHandler DefaultHandler not implemented")
+	errGRPCHandlerOfUnknownHandlerNotImplemented     = errors.New("generic.UnknownServiceOrMethodHandler GRPCHandler not implemented")
+	errTTStreamHandlerOfUnknownHandlerNotImplemented = errors.New("generic.UnknownServiceOrMethodHandler TTStreamHandler not implemented")
 )
 
 // Service is the v1 generic service interface.
@@ -75,7 +80,25 @@ func ServiceV2Iface2ServiceV2(iface ServiceV2Iface) *ServiceV2 {
 	}
 }
 
-// ServiceInfoWithGeneric create a generic ServiceInfo
+// UnknownServiceOrMethodHandler handles unknown service or method traffic.
+type UnknownServiceOrMethodHandler struct {
+	// optional, handle ttheader/framed traffic, support both thrift binary and protobuf binary
+	DefaultHandler func(ctx context.Context, service, method string, request interface{}) (response interface{}, err error)
+	// optional, handle ttstream traffic, support only thrift binary
+	TTStreamHandler func(ctx context.Context, service, method string, stream BidiStreamingServer) (err error)
+	// optional, handle grpc traffic (include grpc unary), support both thrift binary and protobuf binary
+	GRPCHandler func(ctx context.Context, service, method string, stream BidiStreamingServer) (err error)
+}
+
+// ServiceInfoWithGeneric create a generic ServiceInfo from Generic.
+// Users could creates multiple ServiceInfo with different Generic,
+// and resgiter them through RegisterService interface of server.Server.
+// In this way, users could implement multi-service server.
+// e.g.
+//
+//	svr := server.NewServer(opts...)
+//	svr.RegisterService(ServiceInfoWithGeneric(generic.BinaryThriftGenericV2("EchoService")), &echoService{})
+//  svr.RegisterService(ServiceInfoWithGeneric(generic.MapThriftGeneric(p)), &echo2Service{})
 func ServiceInfoWithGeneric(g Generic) *serviceinfo.ServiceInfo {
 	handlerType := (*Service)(nil)
 
@@ -103,26 +126,44 @@ func ServiceInfoWithGeneric(g Generic) *serviceinfo.ServiceInfo {
 func callHandler(ctx context.Context, handler, arg, result interface{}) error {
 	realArg := arg.(*Args)
 	realResult := result.(*Result)
-	if svcv2, ok := handler.(*ServiceV2); ok {
+	switch svc := handler.(type) {
+	case *ServiceV2:
 		ri := rpcinfo.GetRPCInfo(ctx)
 		methodName := ri.Invocation().MethodName()
 		serviceName := ri.Invocation().ServiceName()
-		if svcv2.GenericCall == nil {
+		if svc.GenericCall == nil {
 			return errGenericCallNotImplemented
 		}
-		success, err := svcv2.GenericCall(ctx, serviceName, methodName, realArg.Request)
+		success, err := svc.GenericCall(ctx, serviceName, methodName, realArg.Request)
 		if err != nil {
 			return err
 		}
 		realResult.Success = success
 		return nil
+	case Service:
+		success, err := handler.(Service).GenericCall(ctx, realArg.Method, realArg.Request)
+		if err != nil {
+			return err
+		}
+		realResult.Success = success
+		return nil
+	case *UnknownServiceOrMethodHandler:
+		ri := rpcinfo.GetRPCInfo(ctx)
+		methodName := ri.Invocation().MethodName()
+		serviceName := ri.Invocation().ServiceName()
+		if svc.DefaultHandler == nil {
+			return errDefaultHandlerOfUnknownHandlerNotImplemented
+		}
+		success, err := svc.DefaultHandler(ctx, serviceName, methodName, realArg.Request)
+		if err != nil {
+			return err
+		}
+		realResult.Success = success
+		return nil
+	default:
+		return fmt.Errorf("CallHandler: unknown handler type %T", handler)
 	}
-	success, err := handler.(Service).GenericCall(ctx, realArg.Method, realArg.Request)
-	if err != nil {
-		return err
-	}
-	realResult.Success = success
-	return nil
+
 }
 
 func newGenericServiceCallArgs() interface{} {
@@ -192,11 +233,31 @@ func bidiStreamingHandlerGetter(mi serviceinfo.MethodInfo) serviceinfo.MethodHan
 		ri := rpcinfo.GetRPCInfo(ctx)
 		methodName := ri.Invocation().MethodName()
 		serviceName := ri.Invocation().ServiceName()
-		svcv2 := handler.(*ServiceV2)
-		if svcv2.BidiStreaming == nil {
-			return errBidiStreamingNotImplemented
+		switch svc := handler.(type) {
+		case *ServiceV2:
+			if svc.BidiStreaming == nil {
+				return errBidiStreamingNotImplemented
+			}
+			return svc.BidiStreaming(ctx, serviceName, methodName, gst)
+		case *UnknownServiceOrMethodHandler:
+			protocol := ri.Config().TransportProtocol()
+			switch {
+			case protocol&transport.GRPC != 0:
+				if svc.GRPCHandler == nil {
+					return errGRPCHandlerOfUnknownHandlerNotImplemented
+				}
+				return svc.GRPCHandler(ctx, serviceName, methodName, gst)
+			case protocol&transport.TTHeaderStreaming != 0:
+				if svc.TTStreamHandler == nil {
+					return errTTStreamHandlerOfUnknownHandlerNotImplemented
+				}
+				return svc.TTStreamHandler(ctx, serviceName, methodName, gst)
+			default:
+				return fmt.Errorf("BidiStreamingHandler: unknown transport protocol %v", protocol.String())
+			}
+		default:
+			return fmt.Errorf("BidiStreamingHandler: unknown handler type %T", handler)
 		}
-		return svcv2.BidiStreaming(ctx, serviceName, methodName, gst)
 	}
 }
 

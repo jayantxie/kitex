@@ -17,7 +17,6 @@
 package genericserver
 
 import (
-	"context"
 	"errors"
 
 	iserver "github.com/cloudwego/kitex/internal/server"
@@ -38,47 +37,37 @@ import (
 // - Unknown method scenario:
 //  1. Match the method info which has the same method name as the requested method name.
 //  2. If no match exists,
-//     - For ttheader/framed traffic: Requests are processed via the UnknownServiceOrMethodHandler.PingPongHandler.
-//     - For grpc/ttstream traffic (include grpc unary): Requests are handled by the UnknownServiceOrMethodHandler.StreamingHandler.
+//     - For ttheader/framed traffic: Requests are processed via the generic.UnknownServiceOrMethodHandler.DefaultHandler.
+//     - For grpc traffic (include grpc unary): Requests are handled by the generic.UnknownServiceOrMethodHandler.GRPCHandler.
+//     - For ttstream traffic: Requests are handled by the generic.UnknownServiceOrMethodHandler.TTStreamHandler.
 //
 // This implementation relies on binary generic invocation.
-// User-processed request/response objects through UnknownServiceOrMethodHandler
-// are of type []byte, containing serialized payload data.
+// User-processed request/response objects through generic.UnknownServiceOrMethodHandler
+// are of type []byte, containing serialized data of the original request/response.
+// And note that for Thrift Unary methods, the serialized data includes encapsulation of the Arg or Result structure.
 //
 // Code example:
 //		svr := server.NewServer(opts...)
-//		err := genericserver.RegisterUnknownServiceOrMethodHandler(svr, &genericserver.UnknownServiceOrMethodHandler{
-//	 		// optional, handle ttheader/framed traffic, support both thrift binary and protobuf binary
-//			PingPongHandler:  pingPongUnknownHandler,
-//			// optional, handle grpc/ttstream traffic (include grpc unary), support both thrift binary and protobuf binary
-//			StreamingHandler: streamingUnknownHandler,
+//		err := genericserver.RegisterUnknownServiceOrMethodHandler(svr, &generic.UnknownServiceOrMethodHandler{
+//			DefaultHandler:  defaultHandler,
+//			TTStreamHandler: ttstreamHandler,
+//			GRPCHandler: grpcHandler,
 //		})
-func RegisterUnknownServiceOrMethodHandler(svr server.Server, unknownHandler *UnknownServiceOrMethodHandler) error {
-	if unknownHandler.PingPongHandler == nil && unknownHandler.StreamingHandler == nil {
-		return errors.New("neither pingpong nor bidi streaming handler registered")
+func RegisterUnknownServiceOrMethodHandler(svr server.Server, unknownHandler *generic.UnknownServiceOrMethodHandler) error {
+	if unknownHandler.DefaultHandler == nil && unknownHandler.GRPCHandler == nil && unknownHandler.TTStreamHandler == nil {
+		return errors.New("neither default nor grpc nor ttstream handler registered")
 	}
 	return svr.RegisterService(&serviceinfo.ServiceInfo{
 		ServiceName: "$UnknownService", // meaningless service info
-	}, &generic.ServiceV2{
-		GenericCall:   unknownHandler.PingPongHandler,
-		BidiStreaming: unknownHandler.StreamingHandler,
-	}, iserver.WithUnknownService())
+	}, unknownHandler, iserver.WithUnknownService())
 }
 
 // NewUnknownServiceOrMethodServer creates a server which registered UnknownServiceOrMethodHandler
 // through RegisterUnknownServiceOrMethodHandler. For more details, see RegisterUnknownServiceOrMethodHandler.
-func NewUnknownServiceOrMethodServer(unknownHandler *UnknownServiceOrMethodHandler, options ...server.Option) server.Server {
+func NewUnknownServiceOrMethodServer(unknownHandler *generic.UnknownServiceOrMethodHandler, options ...server.Option) server.Server {
 	svr := server.NewServer(options...)
 	if err := RegisterUnknownServiceOrMethodHandler(svr, unknownHandler); err != nil {
 		panic(err)
 	}
 	return svr
-}
-
-// UnknownServiceOrMethodHandler handles unknown service or method traffic.
-type UnknownServiceOrMethodHandler struct {
-	// optional, handle ttheader/framed traffic, support both thrift binary and protobuf binary
-	PingPongHandler func(ctx context.Context, service, method string, request interface{}) (response interface{}, err error)
-	// optional, handle grpc/ttstream traffic (include grpc unary), support both thrift binary and protobuf binary
-	StreamingHandler func(ctx context.Context, service, method string, stream generic.BidiStreamingServer) (err error)
 }

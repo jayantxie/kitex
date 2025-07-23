@@ -67,37 +67,43 @@ type Method struct {
 }
 
 // BinaryThriftGeneric raw thrift binary Generic.
-// Deprecated: use BinaryThriftGenericV2 for kitex client,
-// and genericserver.RegisterUnknownServiceOrMethodHandler for kitex server instead.
+// Deprecated: use BinaryThriftGenericV2 instead.
 func BinaryThriftGeneric() Generic {
 	return &binaryThriftGeneric{}
 }
 
 // BinaryThriftGenericV2 is raw thrift binary Generic specific to a single service.
-// Note:
-// Typically, it is used to create a binary generic client for a specific service.
-// For kitex server, please use genericserver.RegisterUnknownServiceOrMethodHandler instead of this api
-// to be compatible with upstream requests that do not carry the service name.
 // eg:
 //
 //		g := generic.BinaryThriftGenericV2("EchoService")
 //		cli, err := genericclient.NewClient("destService", g, cliOpts...)
+//
+// For kitex server, we suggest to use genericserver.RegisterUnknownServiceOrMethodHandler instead of this api
+// to be compatible with upstream requests that do not carry the service name, such as raw thrift traffic.
+// If you are sure that all upstream requests carry the service name, you can also use this interface for the server:
+// eg:
+//
+//		g := generic.BinaryThriftGenericV2("EchoService")
+//		svr.RegisterService(generic.ServiceInfoWithGeneric(g), &echoService{})
 func BinaryThriftGenericV2(serviceName string) Generic {
 	return &binaryThriftGenericV2{
 		codec: newBinaryThriftCodecV2(serviceName),
 	}
 }
 
-// BinaryPbGeneric is raw protobuf binary payload Generic specific to a single service, and packageName is optional for kitex server.
-//
-// Note:
-// Typically, it is used to create a binary generic client for a specific service.
-// For kitex server, please use genericserver.RegisterUnknownServiceOrMethodHandler instead of this api
-// to be compatible with upstream requests that do not carry the service name.
+// BinaryPbGeneric is raw protobuf binary payload Generic specific to a single service.
 // eg:
 //
 //		g := generic.BinaryPbGeneric("EchoService", "echo")
 //		cli, err := genericclient.NewClient("destService", g, cliOpts...)
+//
+// For kitex server, we suggest to use genericserver.RegisterUnknownServiceOrMethodHandler instead of this api
+// to be compatible with upstream requests that do not carry the service name.
+// If you are sure that all upstream requests carry the service name, you can also use this interface for the server:
+// eg:
+//
+//		g := generic.BinaryPbGeneric("EchoService", "echo")  // packageName is optional for kitex server.
+//		svr.RegisterService(generic.ServiceInfoWithGeneric(g), &echoService{})
 func BinaryPbGeneric(svcName, packageName string) Generic {
 	return &binaryPbGeneric{
 		codec: newBinaryPbCodec(svcName, packageName),
