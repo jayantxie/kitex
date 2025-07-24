@@ -37,8 +37,10 @@ const (
 	GenericMethod = "$GenericCall"
 	// PackageName name
 	PackageName = "PackageName"
-	// CombineService name
-	CombineService = "combine_service"
+	// CombineServiceKey is the key for svcInfo.Extra
+	CombineServiceKey = "combine_service"
+	// CombineServiceName is the name of combine service
+	CombineServiceName = "CombineService"
 )
 
 type GenericMethodFunc func(ctx context.Context, methodName string) MethodInfo

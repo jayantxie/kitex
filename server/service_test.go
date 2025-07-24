@@ -47,6 +47,16 @@ var (
 			return mocks.Service3Info().MethodInfo(context.Background(), methodName)
 		},
 	}
+	mockCombineService = &serviceinfo.ServiceInfo{
+		ServiceName: serviceinfo.CombineServiceName,
+		Methods: map[string]serviceinfo.MethodInfo{
+			mocks.MockMethod: mocks.ServiceInfo().MethodInfo(context.Background(), mocks.MockMethod),
+		},
+		PayloadCodec: serviceinfo.Thrift,
+		Extra: map[string]interface{}{
+			serviceinfo.CombineServiceKey: true,
+		},
+	}
 )
 
 func TestSearchService(t *testing.T) {
@@ -186,7 +196,7 @@ func TestSearchService(t *testing.T) {
 					svcInfo: mocks.Service3Info(),
 				},
 			},
-			serviceName:   serviceinfo.CombineService,
+			serviceName:   serviceinfo.CombineServiceName,
 			methodName:    mocks.MockExceptionMethod,
 			expectSvcInfo: mocks.ServiceInfo(),
 		},
@@ -358,11 +368,32 @@ func TestSearchService(t *testing.T) {
 			expectSvcInfo:        mockGenericService,
 			expectUnknownHandler: true,
 		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: mockCombineService,
+				},
+			},
+			serviceName:   "xxxxxx",
+			methodName:    "xxxxxx",
+			expectSvcInfo: mockCombineService,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: mockCombineService,
+				},
+			},
+			strict:        true,
+			serviceName:   "xxxxxx",
+			methodName:    "xxxxxx",
+			expectSvcInfo: nil,
+		},
 	}
 	for i, tcase := range testcases {
 		svcs := newServices()
 		for _, svc := range tcase.svcs {
-			svcs.addService(svc.svcInfo, mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: svc.isFallbackService, IsUnknownService: svc.isUnknownService})
+			test.Assert(t, svcs.addService(svc.svcInfo, mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: svc.isFallbackService, IsUnknownService: svc.isUnknownService}) == nil)
 		}
 		test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) == nil)
 		svcInfo := svcs.SearchService(tcase.serviceName, tcase.methodName, tcase.strict, serviceinfo.Thrift)
@@ -503,11 +534,49 @@ func TestCheckService(t *testing.T) {
 			},
 			expectCheckErr: true,
 		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: generic.ServiceInfoWithGeneric(generic.BinaryThriftGeneric()),
+				},
+			},
+			expectCheckErr: false,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: mockCombineService,
+				},
+				{
+					svcInfo: mocks.ServiceInfo(),
+				},
+			},
+			expectCheckErr: true,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: mockCombineService,
+				},
+				{
+					isUnknownService: true,
+				},
+			},
+			expectCheckErr: true,
+		},
+		{
+			svcs: []svc{
+				{
+					svcInfo: mockCombineService,
+				},
+			},
+			expectCheckErr: false,
+		},
 	}
 	for i, tcase := range testcases {
 		svcs := newServices()
 		for _, svc := range tcase.svcs {
-			svcs.addService(svc.svcInfo, mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: svc.isFallbackService, IsUnknownService: svc.isUnknownService})
+			test.Assert(t, svcs.addService(svc.svcInfo, mocks.MyServiceHandler(), &RegisterOptions{IsFallbackService: svc.isFallbackService, IsUnknownService: svc.isUnknownService}) == nil)
 		}
 		test.Assert(t, svcs.check(tcase.refuseTrafficWithoutServiceName) != nil == tcase.expectCheckErr, i)
 	}

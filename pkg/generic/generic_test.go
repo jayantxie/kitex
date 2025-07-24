@@ -55,7 +55,7 @@ func TestMapThriftGeneric(t *testing.T) {
 
 	test.Assert(t, g.IDLServiceName() == "Mock")
 
-	isCombineService, _ := g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ := g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, !isCombineService)
 
 	err = SetBinaryWithBase64(g, true)
@@ -85,7 +85,7 @@ func TestMapThriftGenericForJSON(t *testing.T) {
 
 	test.Assert(t, g.IDLServiceName() == "Mock")
 
-	isCombineService, _ := g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ := g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, !isCombineService)
 
 	err = SetBinaryWithBase64(g, true)
@@ -112,7 +112,7 @@ func TestHTTPThriftGeneric(t *testing.T) {
 
 	test.Assert(t, g.IDLServiceName() == "ExampleService")
 
-	isCombineService, _ := g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ := g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, !isCombineService)
 
 	test.Assert(t, !hg.codec.dynamicgoEnabled)
@@ -160,7 +160,7 @@ func TestHTTPThriftGenericWithDynamicGo(t *testing.T) {
 
 	test.Assert(t, g.IDLServiceName() == "ExampleService")
 
-	isCombineService, _ := g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ := g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, !isCombineService)
 
 	test.Assert(t, hg.codec.dynamicgoEnabled)
@@ -208,7 +208,7 @@ func TestJSONThriftGeneric(t *testing.T) {
 
 	test.Assert(t, g.IDLServiceName() == "Mock")
 
-	isCombineService, _ := g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ := g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, !isCombineService)
 
 	test.Assert(t, !jg.codec.dynamicgoEnabled)
@@ -240,7 +240,7 @@ func TestJSONThriftGenericWithDynamicGo(t *testing.T) {
 
 	test.Assert(t, g.IDLServiceName() == "Mock")
 
-	isCombineService, _ := g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ := g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, !isCombineService)
 
 	test.Assert(t, jg.codec.dynamicgoEnabled)
@@ -275,7 +275,7 @@ func TestJSONPbGeneric(t *testing.T) {
 
 	test.Assert(t, g.IDLServiceName() == "Echo")
 
-	isCombineService, _ := g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ := g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, !isCombineService)
 
 	test.Assert(t, g.PayloadCodecType() == serviceinfo.Protobuf)
@@ -303,7 +303,7 @@ func TestIsCombinedServices(t *testing.T) {
 	test.Assert(t, err == nil)
 	g.Close()
 
-	isCombineService, _ := g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ := g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, isCombineService)
 
 	// thrift with dynamicgo
@@ -314,7 +314,7 @@ func TestIsCombinedServices(t *testing.T) {
 	test.Assert(t, err == nil)
 	g.Close()
 
-	isCombineService, _ = g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ = g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, isCombineService)
 
 	// pb with dynamicgo
@@ -329,7 +329,7 @@ func TestIsCombinedServices(t *testing.T) {
 	test.Assert(t, err == nil)
 	g.Close()
 
-	isCombineService, _ = g.GetExtra(serviceinfo.CombineService).(bool)
+	isCombineService, _ = g.GetExtra(serviceinfo.CombineServiceKey).(bool)
 	test.Assert(t, isCombineService)
 
 	// TODO: test pb after supporting parse mode

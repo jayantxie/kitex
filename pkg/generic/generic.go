@@ -388,7 +388,7 @@ func (g *mapThriftGeneric) IDLServiceName() string {
 }
 
 func (g *mapThriftGeneric) GetExtra(key string) interface{} {
-	if key == serviceinfo.CombineService {
+	if key == serviceinfo.CombineServiceKey {
 		s, _ := g.codec.combineService.Load().(bool)
 		return s
 	}
@@ -424,7 +424,7 @@ func (g *jsonThriftGeneric) IDLServiceName() string {
 }
 
 func (g *jsonThriftGeneric) GetExtra(key string) interface{} {
-	if key == serviceinfo.CombineService {
+	if key == serviceinfo.CombineServiceKey {
 		s, _ := g.codec.combineService.Load().(bool)
 		return s
 	}
@@ -464,7 +464,7 @@ func (g *jsonPbGeneric) GetExtra(key string) interface{} {
 	case serviceinfo.PackageName:
 		s, _ := g.codec.packageName.Load().(string)
 		return s
-	case serviceinfo.CombineService:
+	case serviceinfo.CombineServiceKey:
 		s, _ := g.codec.combineService.Load().(bool)
 		return s
 	}
@@ -505,7 +505,7 @@ func (g *httpThriftGeneric) GetExtra(key string) interface{} {
 		return GetMethodNameByRequestFunc(func(req interface{}) (string, error) {
 			return g.codec.getMethodByReq(req)
 		})
-	case serviceinfo.CombineService:
+	case serviceinfo.CombineServiceKey:
 		s, _ := g.codec.combineService.Load().(bool)
 		return s
 	}
@@ -545,7 +545,7 @@ func (g *httpPbThriftGeneric) GetExtra(key string) interface{} {
 		return GetMethodNameByRequestFunc(func(req interface{}) (string, error) {
 			return g.codec.getMethodByReq(req)
 		})
-	case serviceinfo.CombineService:
+	case serviceinfo.CombineServiceKey:
 		s, _ := g.codec.combineService.Load().(bool)
 		return s
 	}

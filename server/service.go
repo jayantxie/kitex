@@ -102,15 +102,19 @@ func (u *unknownService) getOrStoreSvc(svcName string, codecType serviceinfo.Pay
 }
 
 type services struct {
-	knownSvcMap     map[string]*service // key: service name
-	nonFallbackSvcs []*service
+	knownSvcMap map[string]*service // key: service name
 
-	fallbackSvc *service
+	// fallbackSvc is to get the unique svcInfo
+	// if there are multiple services which have the same method.
+	fallbackSvc     *service
+	nonFallbackSvcs []*service
 
 	unknownSvc *unknownService
 
 	// be compatible with binary thrift generic v1
 	binaryThriftGenericV1SvcInfo *serviceinfo.ServiceInfo
+	// be compatible with server combine service
+	combineSvcInfo *serviceinfo.ServiceInfo
 
 	refuseTrafficWithoutServiceName bool
 }
@@ -167,7 +171,7 @@ func (s *services) check(refuseTrafficWithoutServiceName bool) error {
 		return errors.New("run: no service. Use RegisterService to set one")
 	}
 	for _, svc := range s.knownSvcMap {
-		// special treatment for binary thrift generic v1, it doesn't support multi services.
+		// special treatment to binary thrift generic v1, it doesn't support multi services and unknown service.
 		if svc.svcInfo.ServiceName == serviceinfo.GenericService {
 			s.binaryThriftGenericV1SvcInfo = svc.svcInfo
 			if len(s.knownSvcMap) > 1 {
@@ -175,6 +179,17 @@ func (s *services) check(refuseTrafficWithoutServiceName bool) error {
 			}
 			if s.unknownSvc != nil {
 				return fmt.Errorf("binary thrift generic v1 doesn't support unknown service")
+			}
+			return nil
+		}
+		// special treatment to combine service, it doesn't support multi services and unknown service.
+		if isCombineService, _ := svc.svcInfo.Extra[serviceinfo.CombineServiceKey].(bool); isCombineService {
+			s.combineSvcInfo = svc.svcInfo
+			if len(s.knownSvcMap) > 1 {
+				return fmt.Errorf("combine service doesn't support multi services")
+			}
+			if s.unknownSvc != nil {
+				return fmt.Errorf("combine service doesn't support unknown service")
 			}
 			return nil
 		}
@@ -240,15 +255,17 @@ func (s *services) searchByMethodName(methodName string) *serviceinfo.ServiceInf
 }
 
 func (s *services) SearchService(svcName, methodName string, strict bool, codecType serviceinfo.PayloadCodec) *serviceinfo.ServiceInfo {
-	if s.binaryThriftGenericV1SvcInfo != nil {
-		// be compatible with binary thrift generic
-		return s.binaryThriftGenericV1SvcInfo
-	}
 	if strict || s.refuseTrafficWithoutServiceName {
 		if svc := s.knownSvcMap[svcName]; svc != nil {
 			return svc.svcInfo
 		}
 	} else {
+		if s.binaryThriftGenericV1SvcInfo != nil {
+			return s.binaryThriftGenericV1SvcInfo
+		}
+		if s.combineSvcInfo != nil {
+			return s.combineSvcInfo
+		}
 		if svcName == "" {
 			// for non ttheader traffic, service name might be empty, we must fall back to method searching.
 			if svcInfo := s.searchByMethodName(methodName); svcInfo != nil {
@@ -258,7 +275,7 @@ func (s *services) SearchService(svcName, methodName string, strict bool, codecT
 			if svc := s.knownSvcMap[svcName]; svc != nil {
 				return svc.svcInfo
 			}
-			if svcName == serviceinfo.GenericService || svcName == serviceinfo.CombineService {
+			if svcName == serviceinfo.GenericService || svcName == serviceinfo.CombineServiceName {
 				// Maybe combine or generic service name,
 				// because Kitex client will write these two service name if the version is between v0.9.0-v0.9.1
 				// TODO: remove this logic if this version range is converged

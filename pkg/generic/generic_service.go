@@ -111,8 +111,8 @@ func ServiceInfoWithGeneric(g Generic) *serviceinfo.ServiceInfo {
 		GenericMethod: g.GenericMethod(),
 	}
 	svcInfo.Extra["generic"] = true
-	if combineService, _ := g.GetExtra(serviceinfo.CombineService).(bool); combineService {
-		svcInfo.Extra[serviceinfo.CombineService] = true
+	if combineService, _ := g.GetExtra(serviceinfo.CombineServiceKey).(bool); combineService {
+		svcInfo.Extra[serviceinfo.CombineServiceKey] = true
 	}
 	if pkg, _ := g.GetExtra(serviceinfo.PackageName).(string); pkg != "" {
 		svcInfo.Extra[serviceinfo.PackageName] = pkg

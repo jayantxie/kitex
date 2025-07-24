@@ -179,8 +179,8 @@ func (t *svrTransHandler) OnStream(ctx context.Context, conn net.Conn, st *strea
 	}()
 
 	ink := ri.Invocation().(rpcinfo.InvocationSetter)
-	// TODO: support protobuf codec
-	sinfo := t.opt.SvcSearcher.SearchService(st.Service(), st.Method(), true, serviceinfo.Thrift)
+	// TODO: support protobuf codec, and make `strict` true when combine service is not supported.
+	sinfo := t.opt.SvcSearcher.SearchService(st.Service(), st.Method(), false, serviceinfo.Thrift)
 	if sinfo == nil {
 		err = remote.NewTransErrorWithMsg(remote.UnknownService, fmt.Sprintf("unknown service %s", st.Service()))
 		return
