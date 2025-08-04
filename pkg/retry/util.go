@@ -199,7 +199,7 @@ func ShallowCopyStructPointer(v interface{}) interface{} {
 // NOTE: src and dst must be non nil pointers to the same type of struct.
 // It might panic, callers should recover it.
 // It equals to: *dst = *src .
-func ShallowCopyStructPointerTo(src interface{}, dst interface{}) {
+func ShallowCopyStructPointerTo(src, dst interface{}) {
 	if src == nil || dst == nil {
 		return
 	}

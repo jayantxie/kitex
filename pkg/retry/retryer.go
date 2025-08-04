@@ -31,7 +31,7 @@ import (
 )
 
 // RPCCallFunc is the definition with wrap rpc call
-type RPCCallFunc func(ctx context.Context, retryer Retryer, request interface{}, response interface{}) (rpcinfo rpcinfo.RPCInfo, err error)
+type RPCCallFunc func(ctx context.Context, retryer Retryer, request, response interface{}) (rpcinfo rpcinfo.RPCInfo, err error)
 
 // GenRetryKeyFunc to generate retry key through rpcinfo.
 // You can customize the config key according to your config center.

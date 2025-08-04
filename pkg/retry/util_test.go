@@ -139,7 +139,7 @@ func Test_ShallowCopyStructPointerTo(t *testing.T) {
 			}
 		}()
 		src := &SampleStruct{Field1: "source", Field2: &i456}
-		var dst = &struct {
+		dst := &struct {
 			Field1 string
 			Field2 *int
 			Field3 bool
