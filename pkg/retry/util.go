@@ -179,27 +179,30 @@ func IsRemoteRetryRequest(ctx context.Context) bool {
 	return isRetry
 }
 
-// NewStructPointer creates a pointer to a new element with the same type of *v.
-// NOTE: v must be a pointer to a struct, and don't need to copy the element inside.
-// NewStructPointer might panic, callers should recover it.
-func NewStructPointer(v interface{}) interface{} {
+// ShallowCopyStructPointer creates a pointer to a new element with the same type of *v.
+// and copies the element inside v to the new element.
+// NOTE: v must be non nil pointer to the type of struct.
+// It might panic, callers should recover it.
+// It equals to: nv := new(T); *nv = *v .
+func ShallowCopyStructPointer(v interface{}) interface{} {
 	if v == nil {
 		return nil
 	}
-	rt := reflect.TypeOf(v)
-	if rt.Kind() != reflect.Ptr {
-		panic("retry shallow copy: not a pointer")
-	}
-	return reflect.New(rt.Elem()).Interface()
+	rv := reflect.ValueOf(v)
+	rvElem := rv.Elem()
+	nv := reflect.New(rvElem.Type())
+	nv.Elem().Set(rvElem)
+	return nv.Interface()
 }
 
-// ShallowCopyStructPointer copies the element inside src to dst.
+// ShallowCopyStructPointerTo copies the element inside src to dst.
 // NOTE: src and dst must be non nil pointers to the same type of struct.
 // It might panic, callers should recover it.
 // It equals to: *dst = *src .
-func ShallowCopyStructPointer(src interface{}, dst interface{}) {
+func ShallowCopyStructPointerTo(src interface{}, dst interface{}) {
 	if src == nil || dst == nil {
 		return
 	}
-	reflect.ValueOf(dst).Elem().Set(reflect.ValueOf(src).Elem())
+	dstrv, srcrv := reflect.ValueOf(dst), reflect.ValueOf(src)
+	dstrv.Elem().Set(srcrv.Elem())
 }

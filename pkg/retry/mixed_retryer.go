@@ -141,7 +141,7 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 					// record stat before call since requests may be slow, making the limiter more accurate
 					recordRetryStat(cbKey, r.cbContainer.cbPanel, ct)
 				}
-				nresp = NewStructPointer(resp)
+				nresp = ShallowCopyStructPointer(resp)
 				cRI, e = rpcCall(ctx, r, req, nresp)
 				recordCost(ct, callStart, &recordCostDoing, &callCosts, &abort, e)
 				if !r.cbContainer.enablePercentageLimit && r.cbContainer.cbStat {
@@ -193,7 +193,7 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 			}
 			atomic.StoreInt32(&abort, 1)
 			recordRetryInfo(nonFinishedErrRes.ri, atomic.LoadInt32(&callTimes), callCosts.String())
-			ShallowCopyStructPointer(nonFinishedErrRes.resp, resp)
+			ShallowCopyStructPointerTo(nonFinishedErrRes.resp, resp)
 			return nonFinishedErrRes.ri, false, nonFinishedErrRes.err
 		}
 	}

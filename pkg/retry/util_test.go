@@ -64,16 +64,16 @@ func TestIsRemoteRetryRequest(t *testing.T) {
 	})
 }
 
-type XXXResult struct {
-	str string
-}
-
-func TestNewStructPointer(t *testing.T) {
-	type MyStruct struct{ Val int }
+func TestShallowCopyStructPointer(t *testing.T) {
+	type MyStruct struct {
+		Val int
+		Str *string
+	}
 
 	t.Run("normal struct pointer", func(t *testing.T) {
-		original := &MyStruct{Val: 10}
-		copied := NewStructPointer(original)
+		str := "hello"
+		original := &MyStruct{Val: 10, Str: &str}
+		copied := ShallowCopyStructPointer(original)
 
 		if reflect.TypeOf(copied) != reflect.TypeOf(original) {
 			t.Errorf("Type mismatch, got %T, want %T", copied, original)
@@ -81,12 +81,16 @@ func TestNewStructPointer(t *testing.T) {
 		if copied == original {
 			t.Error("Should create new instance, but got same pointer")
 		}
+		if copied.(*MyStruct).Val != original.Val {
+			t.Errorf("Value mismatch, got %v, want %v", copied.(*MyStruct).Val, original.Val)
+		}
+		if copied.(*MyStruct).Str != original.Str {
+			t.Errorf("Value mismatch, got %v, want %v", copied.(*MyStruct).Str, original.Str)
+		}
 	})
 
 	t.Run("nil input", func(t *testing.T) {
-		if got := NewStructPointer(nil); got != nil {
-			t.Errorf("Expected nil, got %v", got)
-		}
+		test.Assert(t, ShallowCopyStructPointer(nil) == nil)
 	})
 
 	t.Run("non-pointer input panic", func(t *testing.T) {
@@ -96,30 +100,34 @@ func TestNewStructPointer(t *testing.T) {
 			}
 		}()
 
-		NewStructPointer(MyStruct{Val: 10}) // Should panic
+		ShallowCopyStructPointer(MyStruct{Val: 10}) // Should panic
 	})
 }
 
-func Test_ShallowCopyStructPointer(t *testing.T) {
+func Test_ShallowCopyStructPointerTo(t *testing.T) {
 	type SampleStruct struct {
 		Field1     string
-		Field2     int
+		Field2     *int
 		innerField int
 	}
 
+	i123 := 123
+	i456 := 456
+
 	t.Run("src is nil", func(t *testing.T) {
-		dst := &SampleStruct{Field1: "test", Field2: 123}
-		ShallowCopyStructPointer(nil, dst)
-		if dst == nil || dst.Field1 != "test" || dst.Field2 != 123 {
+		dst := &SampleStruct{Field1: "test", Field2: &i123}
+		ShallowCopyStructPointerTo(nil, dst)
+		if dst == nil || dst.Field1 != "test" || dst.Field2 != &i123 {
 			t.Errorf("Expected dst to remain unchanged, got %v", dst)
 		}
+		ShallowCopyStructPointerTo(nil, nil)
 	})
 
 	t.Run("inner field is copied", func(t *testing.T) {
-		src := &SampleStruct{Field1: "source", Field2: 456, innerField: 789}
-		dst := &SampleStruct{Field1: "test", Field2: 123}
-		ShallowCopyStructPointer(src, dst)
-		if dst.Field1 != "source" || dst.Field2 != 456 || dst.innerField != 789 {
+		src := &SampleStruct{Field1: "source", Field2: &i456, innerField: 789}
+		dst := &SampleStruct{Field1: "test", Field2: &i123}
+		ShallowCopyStructPointerTo(src, dst)
+		if dst.Field1 != "source" || dst.Field2 != &i456 || dst.innerField != 789 {
 			t.Errorf("Expected dst to be updated to src values, got %v", dst)
 		}
 	})
@@ -130,14 +138,14 @@ func Test_ShallowCopyStructPointer(t *testing.T) {
 				t.Error("Expected panic but didn't get one")
 			}
 		}()
-		src := &SampleStruct{Field1: "source", Field2: 456}
+		src := &SampleStruct{Field1: "source", Field2: &i456}
 		var dst = &struct {
 			Field1 string
-			Field2 int
+			Field2 *int
 			Field3 bool
-		}{Field1: "test", Field2: 123, Field3: true}
-		ShallowCopyStructPointer(src, dst)
-		if dst.Field1 != "source" || dst.Field2 != 456 || !dst.Field3 {
+		}{Field1: "test", Field2: &i123, Field3: true}
+		ShallowCopyStructPointerTo(src, dst)
+		if dst.Field1 != "source" || dst.Field2 != &i456 || !dst.Field3 {
 			t.Errorf("Expected dst to be partially updated to src values, got %v", dst)
 		}
 	})

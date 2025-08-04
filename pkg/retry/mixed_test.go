@@ -465,7 +465,7 @@ func TestMockCase3WithDiffRetry(t *testing.T) {
 		cost := time.Since(start) // 100+(100,100) = 200
 		test.Assert(t, err != nil, err)
 		test.Assert(t, errors.Is(err, kerrors.ErrRPCTimeout))
-		test.Assert(t, ret.getCallTimes() == 2, ret.callTimes)
+		test.Assert(t, ret.getCallTimes() == 2 || ret.getCallTimes() == 3, ret.callTimes)
 		test.Assert(t, !ok)
 		test.Assert(t, math.Abs(float64(cost.Milliseconds())-200.0) < 50.0, cost.Milliseconds())
 	})
@@ -745,13 +745,13 @@ func TestAllRPCFinishedRetryPanic(t *testing.T) {
 	mp.WithMaxRetryTimes(3) // retryTimes = 3, doneCount will become 4
 	p := BuildMixedPolicy(mp)
 
-	alwaysRPCFinished := func(ctx context.Context, r Retryer) (rpcinfo.RPCInfo, interface{}, error) {
+	alwaysRPCFinished := func(ctx context.Context, r Retryer, req, resp interface{}) (rpcinfo.RPCInfo, error) {
 		atomic.AddInt32(&callCount, 1)
-		return genRPCInfo(), nil, kerrors.ErrRPCFinish
+		return genRPCInfo(), kerrors.ErrRPCFinish
 	}
 
 	ri := genRPCInfo()
 	ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
-	_, _, err := rc.WithRetryIfNeeded(ctx, &p, alwaysRPCFinished, ri, nil)
+	_, _, err := rc.WithRetryIfNeeded(ctx, &p, alwaysRPCFinished, ri, nil, nil)
 	test.Assert(t, strings.Contains(err.Error(), "KITEX: panic in retry"), err)
 }

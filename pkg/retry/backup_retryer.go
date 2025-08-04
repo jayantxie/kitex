@@ -136,7 +136,7 @@ func (r *backupRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpc
 					// record stat before call since requests may be slow, making the limiter more accurate
 					recordRetryStat(cbKey, r.cbContainer.cbPanel, ct)
 				}
-				nresp = NewStructPointer(resp)
+				nresp = ShallowCopyStructPointer(resp)
 				cRI, e = rpcCall(ctx, r, req, nresp)
 				recordCost(ct, callStart, &recordCostDoing, &callCosts, &abort, e)
 				if !r.cbContainer.enablePercentageLimit && r.cbContainer.cbStat {
@@ -161,7 +161,7 @@ func (r *backupRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpc
 				}
 				continue
 			}
-			ShallowCopyStructPointer(res.resp, resp)
+			ShallowCopyStructPointerTo(res.resp, resp)
 			atomic.StoreInt32(&abort, 1)
 			recordRetryInfo(res.ri, atomic.LoadInt32(&callTimes), callCosts.String())
 			return res.ri, false, res.err
