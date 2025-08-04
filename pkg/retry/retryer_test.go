@@ -34,6 +34,7 @@ import (
 	"github.com/cloudwego/kitex/pkg/remote"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/rpcinfo/remoteinfo"
+	"github.com/cloudwego/kitex/pkg/serviceinfo"
 	"github.com/cloudwego/kitex/pkg/stats"
 )
 
@@ -541,6 +542,10 @@ func TestDifferentMethodConfig(t *testing.T) {
 	method2 := "method2"
 	to := remoteinfo.NewRemoteInfo(&rpcinfo.EndpointBasicInfo{Method: method2}, method2).ImmutableView()
 	ri = rpcinfo.NewRPCInfo(to, to, rpcinfo.NewInvocation("", method2), rpcinfo.NewRPCConfig(), rpcinfo.NewRPCStats())
+	setter := ri.Invocation().(rpcinfo.InvocationSetter)
+	setter.SetMethodInfo(serviceinfo.NewMethodInfo(nil, nil, func() interface{} {
+		return nil
+	}, false))
 	ctx = rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 	_, ok, err = rc.WithRetryIfNeeded(ctx, &Policy{}, rpcCall, ri, nil, nil)
 	test.Assert(t, err == nil, err)

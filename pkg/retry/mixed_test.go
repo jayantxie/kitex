@@ -189,17 +189,17 @@ func TestMixedRetry(t *testing.T) {
 		rc := NewRetryContainer()
 		err := rc.Init(map[string]Policy{Wildcard: BuildMixedPolicy(NewMixedPolicy(100))}, shouldResultRetry)
 		test.Assert(t, err == nil, err)
-		ri, ok, err := rc.WithRetryIfNeeded(ctx, nil, retryWithTransError(0, transErrCode), ri, nil, nil)
+		ri1, ok, err := rc.WithRetryIfNeeded(ctx, nil, retryWithTransError(0, transErrCode), ri, nil, nil)
 		test.Assert(t, err == nil, err)
 		test.Assert(t, !ok)
-		v, ok := ri.To().Tag(remoteTagKey)
+		v, ok := ri1.To().Tag(remoteTagKey)
 		test.Assert(t, ok)
 		test.Assert(t, v == remoteTagValue)
 
-		ri, ok, err = rc.WithRetryIfNeeded(ctx, nil, retryWithTransError(0, 1002), ri, nil, nil)
+		ri2, ok, err := rc.WithRetryIfNeeded(ctx, nil, retryWithTransError(0, 1002), ri, nil, nil)
 		test.Assert(t, err != nil)
 		test.Assert(t, !ok)
-		_, ok = ri.To().Tag(remoteTagKey)
+		_, ok = ri2.To().Tag(remoteTagKey)
 		test.Assert(t, !ok)
 	})
 
@@ -291,7 +291,9 @@ func TestMixedRetry(t *testing.T) {
 // - Failure Retry: Success, cost 350ms
 // - Backup Retry: Failure, cost 200ms
 func TestMockCase1WithDiffRetry(t *testing.T) {
-	ri := genRPCInfo()
+	ri := genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 	retryWithTimeout := func(ri rpcinfo.RPCInfo, callTimes int32) RPCCallFunc {
 		return func(ctx context.Context, r Retryer, request, response interface{}) (rpcinfo.RPCInfo, error) {
@@ -314,7 +316,9 @@ func TestMockCase1WithDiffRetry(t *testing.T) {
 		mp := NewMixedPolicy(100)
 		mp.WithMaxRetryTimes(2) // max call times is 3
 		p := BuildMixedPolicy(mp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithTimeout(ri, 0), ri, nil, ret)
@@ -331,7 +335,9 @@ func TestMockCase1WithDiffRetry(t *testing.T) {
 		fp := NewFailurePolicy()
 		fp.WithMaxRetryTimes(2) // max call times is 3
 		p := BuildFailurePolicy(fp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithTimeout(ri, 0), ri, nil, ret)
@@ -348,7 +354,9 @@ func TestMockCase1WithDiffRetry(t *testing.T) {
 		bp := NewBackupPolicy(100)
 		bp.WithMaxRetryTimes(2) // max call times is 3
 		p := BuildBackupRequest(bp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithTimeout(ri, 0), ri, nil, ret)
@@ -366,7 +374,9 @@ func TestMockCase1WithDiffRetry(t *testing.T) {
 // - Failure Retry: Success, cost 350ms
 // - Backup Retry: Failure, cost 200ms (same with Mixed Retry)
 func TestMockCase2WithDiffRetry(t *testing.T) {
-	ri := genRPCInfo()
+	ri := genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 	retryWithTimeout := func(ri rpcinfo.RPCInfo, callTimes int32) RPCCallFunc {
 		return func(ctx context.Context, r Retryer, request, response interface{}) (rpcinfo.RPCInfo, error) {
@@ -389,7 +399,9 @@ func TestMockCase2WithDiffRetry(t *testing.T) {
 		mp := NewMixedPolicy(100)
 		mp.WithMaxRetryTimes(2) // max call times is 3
 		p := BuildMixedPolicy(mp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithTimeout(ri, 0), ri, nil, ret)
@@ -406,7 +418,9 @@ func TestMockCase2WithDiffRetry(t *testing.T) {
 		fp := NewFailurePolicy()
 		fp.WithMaxRetryTimes(2) // max call times is 3
 		p := BuildFailurePolicy(fp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithTimeout(ri, 0), ri, nil, ret)
@@ -423,7 +437,9 @@ func TestMockCase2WithDiffRetry(t *testing.T) {
 		bp := NewBackupPolicy(100)
 		bp.WithMaxRetryTimes(2) // max call times is 3
 		p := BuildBackupRequest(bp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithTimeout(ri, 0), ri, nil, ret)
@@ -441,7 +457,9 @@ func TestMockCase2WithDiffRetry(t *testing.T) {
 // - Failure Retry: Failure, cost 300ms
 // - Backup Retry: Failure, cost 100ms (max cost is timeout)
 func TestMockCase3WithDiffRetry(t *testing.T) {
-	ri := genRPCInfo()
+	ri := genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 	retryWithTimeout := func(ri rpcinfo.RPCInfo, callTimes int32) RPCCallFunc {
 		return func(ctx context.Context, r Retryer, request, response interface{}) (rpcinfo.RPCInfo, error) {
@@ -458,7 +476,9 @@ func TestMockCase3WithDiffRetry(t *testing.T) {
 		mp := NewMixedPolicy(100)
 		mp.WithMaxRetryTimes(2) // max call times is 3
 		p := BuildMixedPolicy(mp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithTimeout(ri, 0), ri, nil, ret)
@@ -476,7 +496,9 @@ func TestMockCase3WithDiffRetry(t *testing.T) {
 		fp := NewFailurePolicy()
 		fp.WithMaxRetryTimes(2) // max call times is 3
 		p := BuildFailurePolicy(fp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithTimeout(ri, 0), ri, nil, ret)
@@ -494,7 +516,9 @@ func TestMockCase3WithDiffRetry(t *testing.T) {
 		bp := NewBackupPolicy(100)
 		bp.WithMaxRetryTimes(2) // max call times is 3
 		p := BuildBackupRequest(bp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithTimeout(ri, 0), ri, nil, ret)
@@ -518,7 +542,9 @@ func TestMockCase3WithDiffRetry(t *testing.T) {
 // - Backup Retry: Biz Error, cost 250ms
 func TestMockCase4WithDiffRetry(t *testing.T) {
 	bizStatusCode0, bizStatusCode1, bizStatusCode2 := 0, 11111, 11112
-	ri := genRPCInfo()
+	ri := genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx := rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 	retryWithResp := func(ri rpcinfo.RPCInfo, callTimes int32) RPCCallFunc {
 		return func(ctx context.Context, r Retryer, request, response interface{}) (rpcinfo.RPCInfo, error) {
@@ -554,7 +580,9 @@ func TestMockCase4WithDiffRetry(t *testing.T) {
 		mp.WithMaxRetryTimes(3) // max call times is 4
 		mp.WithSpecifiedResultRetry(resultRetry)
 		p := BuildMixedPolicy(mp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithResp(ri, 0), ri, nil, ret)
@@ -572,7 +600,9 @@ func TestMockCase4WithDiffRetry(t *testing.T) {
 		fp.WithMaxRetryTimes(3) // max call times is 4
 		fp.WithSpecifiedResultRetry(resultRetry)
 		p := BuildFailurePolicy(fp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithResp(ri, 0), ri, nil, ret)
@@ -589,7 +619,9 @@ func TestMockCase4WithDiffRetry(t *testing.T) {
 		bp := NewBackupPolicy(100)
 		bp.WithMaxRetryTimes(2) // backup max retry times is 2
 		p := BuildBackupRequest(bp)
-		ri = genRPCInfo()
+		ri = genRPCInfo(func() interface{} {
+			return &mockResult{}
+		})
 		ret := &mockResult{}
 		start := time.Now()
 		_, ok, err := rc.WithRetryIfNeeded(ctx, &p, retryWithResp(ri, 0), ri, nil, ret)

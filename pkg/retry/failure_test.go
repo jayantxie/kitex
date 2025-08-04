@@ -317,7 +317,9 @@ func TestSpecifiedRespRetry(t *testing.T) {
 		}
 	}
 	ctx := context.Background()
-	ri := genRPCInfo()
+	ri := genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx = rpcinfo.NewCtxWithRPCInfo(ctx, ri)
 	rc := NewRetryContainer()
 	// case1: specified method retry with resp
@@ -345,7 +347,9 @@ func TestSpecifiedRespRetry(t *testing.T) {
 	rc = NewRetryContainer()
 	err = rc.Init(map[string]Policy{Wildcard: BuildBackupRequest(NewBackupPolicy(100))}, shouldResultRetry)
 	test.Assert(t, err == nil, err)
-	ri = genRPCInfo()
+	ri = genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx = rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 	_, ok, err = rc.WithRetryIfNeeded(ctx, &Policy{}, retryWithResp, ri, nil, retryResult)
 	test.Assert(t, err == nil, err)
@@ -365,7 +369,9 @@ func TestSpecifiedRespRetry(t *testing.T) {
 	rc = NewRetryContainer()
 	err = rc.Init(map[string]Policy{method: BuildFailurePolicy(NewFailurePolicy())}, shouldResultRetry)
 	test.Assert(t, err == nil, err)
-	ri = genRPCInfo()
+	ri = genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx = rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 	ri, ok, err = rc.WithRetryIfNeeded(ctx, &Policy{}, retryWithResp, ri, nil, retryResult)
 	test.Assert(t, err == nil, err)
@@ -539,14 +545,18 @@ func TestSpecifiedRespRetryWithCtx(t *testing.T) {
 		retryResult := response.(*mockResult)
 		if newVal == 1 {
 			retryResult.setResult(retryResp)
-			return genRPCInfo(), nil
+			return genRPCInfo(func() interface{} {
+				return &mockResult{}
+			}), nil
 		} else {
 			retryResult.setResult(noRetryResp)
 			return genRPCInfoWithRemoteTag(remoteTags), nil
 		}
 	}
 	ctx := context.Background()
-	ri := genRPCInfo()
+	ri := genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx = rpcinfo.NewCtxWithRPCInfo(ctx, ri)
 	rc := NewRetryContainer()
 	// case1: specified method retry with resp
@@ -573,7 +583,9 @@ func TestSpecifiedRespRetryWithCtx(t *testing.T) {
 	rc = NewRetryContainer()
 	err = rc.Init(map[string]Policy{Wildcard: BuildBackupRequest(NewBackupPolicy(100))}, shouldResultRetry)
 	test.Assert(t, err == nil, err)
-	ri = genRPCInfo()
+	ri = genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx = rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 	_, ok, err = rc.WithRetryIfNeeded(ctx, &Policy{}, retryWithResp, ri, nil, retryResult)
 	test.Assert(t, err == nil, err)
@@ -593,7 +605,9 @@ func TestSpecifiedRespRetryWithCtx(t *testing.T) {
 	rc = NewRetryContainer()
 	err = rc.Init(map[string]Policy{method: BuildFailurePolicy(NewFailurePolicy())}, shouldResultRetry)
 	test.Assert(t, err == nil, err)
-	ri = genRPCInfo()
+	ri = genRPCInfo(func() interface{} {
+		return &mockResult{}
+	})
 	ctx = rpcinfo.NewCtxWithRPCInfo(context.Background(), ri)
 	ri, ok, err = rc.WithRetryIfNeeded(ctx, &Policy{}, retryWithResp, ri, nil, retryResult)
 	test.Assert(t, err == nil, err)

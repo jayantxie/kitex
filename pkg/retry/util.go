@@ -30,6 +30,7 @@ import (
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/rpcinfo/remoteinfo"
+	"github.com/cloudwego/kitex/pkg/serviceinfo"
 )
 
 type ctxKey string
@@ -193,6 +194,15 @@ func ShallowCopyStructPointer(v interface{}) interface{} {
 	nv := reflect.New(rvElem.Type())
 	nv.Elem().Set(rvElem)
 	return nv.Interface()
+}
+
+func getNewRespFunc(mi serviceinfo.MethodInfo) func() interface{} {
+	return func() interface{} {
+		if mi.OneWay() {
+			return nil
+		}
+		return mi.NewResult()
+	}
 }
 
 // ShallowCopyStructPointerTo copies the element inside src to dst.

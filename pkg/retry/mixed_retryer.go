@@ -109,6 +109,7 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 		timer.Stop()
 	}()
 	startTime := time.Now()
+	newRespFunc := getNewRespFunc(firstRI.Invocation().MethodInfo())
 	// include first call, max loop is retryTimes + 1
 	doCall := true
 	for callCount := 0; ; {
@@ -125,15 +126,15 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 					return
 				}
 				var (
-					e     error
-					cRI   rpcinfo.RPCInfo
-					nresp interface{}
+					e       error
+					cRI     rpcinfo.RPCInfo
+					curResp interface{}
 				)
 				defer func() {
 					if panicInfo := recover(); panicInfo != nil {
 						e = panicToErr(ctx, panicInfo, firstRI)
 					}
-					callDone <- &resultWrapper{cRI, nresp, e}
+					callDone <- &resultWrapper{cRI, curResp, e}
 				}()
 				ct := atomic.AddInt32(&callTimes, 1)
 				callStart := time.Now()
@@ -141,8 +142,8 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 					// record stat before call since requests may be slow, making the limiter more accurate
 					recordRetryStat(cbKey, r.cbContainer.cbPanel, ct)
 				}
-				nresp = ShallowCopyStructPointer(resp)
-				cRI, e = rpcCall(ctx, r, req, nresp)
+				curResp = newRespFunc()
+				cRI, e = rpcCall(ctx, r, req, curResp)
 				recordCost(ct, callStart, &recordCostDoing, &callCosts, &abort, e)
 				if !r.cbContainer.enablePercentageLimit && r.cbContainer.cbStat {
 					circuitbreak.RecordStat(ctx, req, nil, e, cbKey, r.cbContainer.cbCtl, r.cbContainer.cbPanel)
