@@ -131,7 +131,7 @@ func (r *failureRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rp
 			break
 		}
 	}
-	ShallowCopyStructPointerTo(curResp, resp)
+	ShallowCopyResults(curResp, resp)
 	recordRetryInfo(cRI, callTimes, callCosts.String())
 	if err == nil && callTimes == 1 {
 		return cRI, true, nil

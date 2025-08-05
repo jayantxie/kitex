@@ -194,7 +194,7 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 			}
 			atomic.StoreInt32(&abort, 1)
 			recordRetryInfo(nonFinishedErrRes.ri, atomic.LoadInt32(&callTimes), callCosts.String())
-			ShallowCopyStructPointerTo(nonFinishedErrRes.resp, resp)
+			ShallowCopyResults(nonFinishedErrRes.resp, resp)
 			return nonFinishedErrRes.ri, false, nonFinishedErrRes.err
 		}
 	}

@@ -18,11 +18,11 @@ package retry
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
 	"github.com/bytedance/gopkg/cloud/metainfo"
 
+	mocks "github.com/cloudwego/kitex/internal/mocks/thrift"
 	"github.com/cloudwego/kitex/internal/test"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 )
@@ -64,47 +64,7 @@ func TestIsRemoteRetryRequest(t *testing.T) {
 	})
 }
 
-func TestShallowCopyStructPointer(t *testing.T) {
-	type MyStruct struct {
-		Val int
-		Str *string
-	}
-
-	t.Run("normal struct pointer", func(t *testing.T) {
-		str := "hello"
-		original := &MyStruct{Val: 10, Str: &str}
-		copied := ShallowCopyStructPointer(original)
-
-		if reflect.TypeOf(copied) != reflect.TypeOf(original) {
-			t.Errorf("Type mismatch, got %T, want %T", copied, original)
-		}
-		if copied == original {
-			t.Error("Should create new instance, but got same pointer")
-		}
-		if copied.(*MyStruct).Val != original.Val {
-			t.Errorf("Value mismatch, got %v, want %v", copied.(*MyStruct).Val, original.Val)
-		}
-		if copied.(*MyStruct).Str != original.Str {
-			t.Errorf("Value mismatch, got %v, want %v", copied.(*MyStruct).Str, original.Str)
-		}
-	})
-
-	t.Run("nil input", func(t *testing.T) {
-		test.Assert(t, ShallowCopyStructPointer(nil) == nil)
-	})
-
-	t.Run("non-pointer input panic", func(t *testing.T) {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("Expected panic but didn't get one")
-			}
-		}()
-
-		ShallowCopyStructPointer(MyStruct{Val: 10}) // Should panic
-	})
-}
-
-func Test_ShallowCopyStructPointerTo(t *testing.T) {
+func Test_ShallowCopyResults(t *testing.T) {
 	type SampleStruct struct {
 		Field1     string
 		Field2     *int
@@ -116,17 +76,17 @@ func Test_ShallowCopyStructPointerTo(t *testing.T) {
 
 	t.Run("src is nil", func(t *testing.T) {
 		dst := &SampleStruct{Field1: "test", Field2: &i123}
-		ShallowCopyStructPointerTo(nil, dst)
+		ShallowCopyResults(nil, dst)
 		if dst == nil || dst.Field1 != "test" || dst.Field2 != &i123 {
 			t.Errorf("Expected dst to remain unchanged, got %v", dst)
 		}
-		ShallowCopyStructPointerTo(nil, nil)
+		ShallowCopyResults(nil, nil)
 	})
 
 	t.Run("inner field is copied", func(t *testing.T) {
 		src := &SampleStruct{Field1: "source", Field2: &i456, innerField: 789}
 		dst := &SampleStruct{Field1: "test", Field2: &i123}
-		ShallowCopyStructPointerTo(src, dst)
+		ShallowCopyResults(src, dst)
 		if dst.Field1 != "source" || dst.Field2 != &i456 || dst.innerField != 789 {
 			t.Errorf("Expected dst to be updated to src values, got %v", dst)
 		}
@@ -144,9 +104,20 @@ func Test_ShallowCopyStructPointerTo(t *testing.T) {
 			Field2 *int
 			Field3 bool
 		}{Field1: "test", Field2: &i123, Field3: true}
-		ShallowCopyStructPointerTo(src, dst)
+		ShallowCopyResults(src, dst)
 		if dst.Field1 != "source" || dst.Field2 != &i456 || !dst.Field3 {
 			t.Errorf("Expected dst to be partially updated to src values, got %v", dst)
 		}
+	})
+
+	t.Run("fast path", func(t *testing.T) {
+		str := "success"
+		src := &mocks.MockTestResult{
+			Success: &str,
+		}
+		dst := &mocks.MockTestResult{}
+		ShallowCopyResults(src, dst)
+		test.Assert(t, dst.IsSetSuccess())
+		test.Assert(t, dst.GetSuccess() == str)
 	})
 }

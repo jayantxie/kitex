@@ -162,7 +162,7 @@ func (r *backupRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpc
 				}
 				continue
 			}
-			ShallowCopyStructPointerTo(res.resp, resp)
+			ShallowCopyResults(res.resp, resp)
 			atomic.StoreInt32(&abort, 1)
 			recordRetryInfo(res.ri, atomic.LoadInt32(&callTimes), callCosts.String())
 			return res.ri, false, res.err

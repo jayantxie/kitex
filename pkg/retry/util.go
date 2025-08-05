@@ -31,6 +31,7 @@ import (
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/rpcinfo/remoteinfo"
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
+	"github.com/cloudwego/kitex/pkg/utils"
 )
 
 type ctxKey string
@@ -180,22 +181,6 @@ func IsRemoteRetryRequest(ctx context.Context) bool {
 	return isRetry
 }
 
-// ShallowCopyStructPointer creates a pointer to a new element with the same type of *v.
-// and copies the element inside v to the new element.
-// NOTE: v must be non nil pointer to the type of struct.
-// It might panic, callers should recover it.
-// It equals to: nv := new(T); *nv = *v .
-func ShallowCopyStructPointer(v interface{}) interface{} {
-	if v == nil {
-		return nil
-	}
-	rv := reflect.ValueOf(v)
-	rvElem := rv.Elem()
-	nv := reflect.New(rvElem.Type())
-	nv.Elem().Set(rvElem)
-	return nv.Interface()
-}
-
 func getNewRespFunc(mi serviceinfo.MethodInfo) func() interface{} {
 	return func() interface{} {
 		if mi.OneWay() {
@@ -205,13 +190,19 @@ func getNewRespFunc(mi serviceinfo.MethodInfo) func() interface{} {
 	}
 }
 
-// ShallowCopyStructPointerTo copies the element inside src to dst.
-// NOTE: src and dst must be non nil pointers to the same type of struct.
+// ShallowCopyResults copies the response inside src to dst.
+// NOTE: src and dst must be non nil pointers to the same type of struct, which is usually utils.KitexResult.
 // It might panic, callers should recover it.
-// It equals to: *dst = *src .
-func ShallowCopyStructPointerTo(src, dst interface{}) {
+func ShallowCopyResults(src, dst interface{}) {
 	if src == nil || dst == nil {
 		return
+	}
+	if srcRes, ok1 := src.(utils.KitexResult); ok1 {
+		if dstRes, ok2 := dst.(utils.KitexResult); ok2 {
+			// fast path
+			dstRes.SetSuccess(srcRes.GetResult())
+			return
+		}
 	}
 	dstrv, srcrv := reflect.ValueOf(dst), reflect.ValueOf(src)
 	dstrv.Elem().Set(srcrv.Elem())
