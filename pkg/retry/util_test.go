@@ -64,7 +64,7 @@ func TestIsRemoteRetryRequest(t *testing.T) {
 	})
 }
 
-func Test_ShallowCopyResults(t *testing.T) {
+func Test_shallowCopyResults(t *testing.T) {
 	type SampleStruct struct {
 		Field1     string
 		Field2     *int
@@ -76,17 +76,17 @@ func Test_ShallowCopyResults(t *testing.T) {
 
 	t.Run("src is nil", func(t *testing.T) {
 		dst := &SampleStruct{Field1: "test", Field2: &i123}
-		ShallowCopyResults(nil, dst)
+		shallowCopyResults(nil, dst)
 		if dst == nil || dst.Field1 != "test" || dst.Field2 != &i123 {
 			t.Errorf("Expected dst to remain unchanged, got %v", dst)
 		}
-		ShallowCopyResults(nil, nil)
+		shallowCopyResults(nil, nil)
 	})
 
 	t.Run("inner field is copied", func(t *testing.T) {
 		src := &SampleStruct{Field1: "source", Field2: &i456, innerField: 789}
 		dst := &SampleStruct{Field1: "test", Field2: &i123}
-		ShallowCopyResults(src, dst)
+		shallowCopyResults(src, dst)
 		if dst.Field1 != "source" || dst.Field2 != &i456 || dst.innerField != 789 {
 			t.Errorf("Expected dst to be updated to src values, got %v", dst)
 		}
@@ -104,7 +104,7 @@ func Test_ShallowCopyResults(t *testing.T) {
 			Field2 *int
 			Field3 bool
 		}{Field1: "test", Field2: &i123, Field3: true}
-		ShallowCopyResults(src, dst)
+		shallowCopyResults(src, dst)
 		if dst.Field1 != "source" || dst.Field2 != &i456 || !dst.Field3 {
 			t.Errorf("Expected dst to be partially updated to src values, got %v", dst)
 		}
@@ -116,7 +116,7 @@ func Test_ShallowCopyResults(t *testing.T) {
 			Success: &str,
 		}
 		dst := &mocks.MockTestResult{}
-		ShallowCopyResults(src, dst)
+		shallowCopyResults(src, dst)
 		test.Assert(t, dst.IsSetSuccess())
 		test.Assert(t, dst.GetSuccess() == str)
 	})

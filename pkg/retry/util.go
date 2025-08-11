@@ -190,10 +190,10 @@ func getNewRespFunc(mi serviceinfo.MethodInfo) func() interface{} {
 	}
 }
 
-// ShallowCopyResults copies the response inside src to dst.
-// NOTE: src and dst must be non nil pointers to the same type of struct, which is usually utils.KitexResult.
-// It might panic, callers should recover it.
-func ShallowCopyResults(src, dst interface{}) {
+// shallowCopyResults copies the response inside src to dst.
+// NOTE: src and dst must be non nil pointers to the same type of struct, which usually implement utils.KitexResult.
+// It might panic.
+func shallowCopyResults(src, dst interface{}) {
 	if src == nil || dst == nil {
 		return
 	}
@@ -204,6 +204,7 @@ func ShallowCopyResults(src, dst interface{}) {
 			return
 		}
 	}
+	// slow path, try reflect
 	dstrv, srcrv := reflect.ValueOf(dst), reflect.ValueOf(src)
 	dstrv.Elem().Set(srcrv.Elem())
 }

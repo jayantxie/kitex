@@ -24,7 +24,6 @@ import (
 	"github.com/cloudwego/gopkg/protocol/ttheader"
 	"github.com/cloudwego/netpoll"
 
-	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/remote"
 	"github.com/cloudwego/kitex/pkg/remote/codec/perrors"
 	netpolltrans "github.com/cloudwego/kitex/pkg/remote/trans/netpoll"
@@ -193,10 +192,6 @@ func (c *defaultCodec) DecodeMeta(ctx context.Context, message remote.Message, i
 		return perrors.NewProtocolErrorWithErrMsg(err, fmt.Sprintf("default codec read failed: %s", err.Error()))
 	}
 
-	if err = checkRPCState(ctx, message); err != nil {
-		// there is one call has finished in retry task, it doesn't need to do decode for this call
-		return err
-	}
 	isTTHeader := IsTTHeader(flagBuf)
 	// 1. decode header
 	if isTTHeader {
@@ -377,16 +372,6 @@ func isThriftBinary(flagBuf []byte) bool {
  */
 func isThriftFramedBinary(flagBuf []byte) bool {
 	return binary.BigEndian.Uint32(flagBuf[Size32:])&MagicMask == ThriftV1Magic
-}
-
-func checkRPCState(ctx context.Context, message remote.Message) error {
-	if message.RPCRole() == remote.Server {
-		return nil
-	}
-	if ctx.Err() == context.DeadlineExceeded || ctx.Err() == context.Canceled {
-		return kerrors.ErrRPCFinish
-	}
-	return nil
 }
 
 func checkPayload(flagBuf []byte, message remote.Message, in remote.ByteBuffer, isTTHeader bool, maxPayloadSize int) error {

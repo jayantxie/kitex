@@ -131,7 +131,7 @@ func (r *failureRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rp
 			break
 		}
 	}
-	ShallowCopyResults(curResp, resp)
+	shallowCopyResults(curResp, resp)
 	recordRetryInfo(cRI, callTimes, callCosts.String())
 	if err == nil && callTimes == 1 {
 		return cRI, true, nil

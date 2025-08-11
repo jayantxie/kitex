@@ -26,7 +26,6 @@ import (
 
 	"github.com/cloudwego/kitex/pkg/circuitbreak"
 	"github.com/cloudwego/kitex/pkg/gofunc"
-	"github.com/cloudwego/kitex/pkg/kerrors"
 	"github.com/cloudwego/kitex/pkg/klog"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/utils"
@@ -95,11 +94,9 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 	var recordCostDoing int32 = 0
 	var abort int32 = 0
 	doneCount := 0
-	finishedErrCount := 0
 
 	// notice: buff num of chan is very important here, it cannot less than call times, or the below chan receive will block
-	callDone := make(chan *resultWrapper, retryTimes+1)
-	var nonFinishedErrRes *resultWrapper
+	callDone := make(chan resultWrapper, retryTimes+1)
 	timer := time.NewTimer(retryDelay)
 	cbKey, _ := r.cbContainer.cbCtl.GetKey(ctx, req)
 	defer func() {
@@ -128,13 +125,13 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 				var (
 					e       error
 					cRI     rpcinfo.RPCInfo
-					curResp interface{}
+					curResp = newRespFunc()
 				)
 				defer func() {
 					if panicInfo := recover(); panicInfo != nil {
 						e = panicToErr(ctx, panicInfo, firstRI)
 					}
-					callDone <- &resultWrapper{cRI, curResp, e}
+					callDone <- resultWrapper{cRI, curResp, e}
 				}()
 				ct := atomic.AddInt32(&callTimes, 1)
 				callStart := time.Now()
@@ -142,7 +139,6 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 					// record stat before call since requests may be slow, making the limiter more accurate
 					recordRetryStat(cbKey, r.cbContainer.cbPanel, ct)
 				}
-				curResp = newRespFunc()
 				cRI, e = rpcCall(ctx, r, req, curResp)
 				recordCost(ct, callStart, &recordCostDoing, &callCosts, &abort, e)
 				if !r.cbContainer.enablePercentageLimit && r.cbContainer.cbStat {
@@ -160,22 +156,6 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 		case res := <-callDone:
 			// result retry
 			doneCount++
-			isFinishErr := res.err != nil && errors.Is(res.err, kerrors.ErrRPCFinish)
-			if nonFinishedErrRes == nil || !isFinishErr {
-				nonFinishedErrRes = res
-			}
-			if isFinishErr {
-				// There will be only one request (goroutine) pass the `checkRPCState`, others will skip decoding
-				// and return `ErrRPCFinish`, to avoid concurrent write to response and save the cost of decoding.
-				// We can safely ignore this error and wait for the response of the passed goroutine.
-				if finishedErrCount++; finishedErrCount >= retryTimes+1 {
-					// But if all requests return this error, it must be a bug, preventive panic to avoid dead loop
-					panic(errUnexpectedFinish)
-				}
-				if doneCount < retryTimes+1 {
-					continue
-				}
-			}
 			if doneCount < retryTimes+1 {
 				if callCount < retryTimes+1 {
 					if msg, ok := r.ShouldRetry(ctx, nil, callCount, req, cbKey); ok {
@@ -193,9 +173,9 @@ func (r *mixedRetryer) Do(ctx context.Context, rpcCall RPCCallFunc, firstRI rpci
 				}
 			}
 			atomic.StoreInt32(&abort, 1)
-			recordRetryInfo(nonFinishedErrRes.ri, atomic.LoadInt32(&callTimes), callCosts.String())
-			ShallowCopyResults(nonFinishedErrRes.resp, resp)
-			return nonFinishedErrRes.ri, false, nonFinishedErrRes.err
+			recordRetryInfo(res.ri, atomic.LoadInt32(&callTimes), callCosts.String())
+			shallowCopyResults(res.resp, resp)
+			return res.ri, false, res.err
 		}
 	}
 }
