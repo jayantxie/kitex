@@ -114,7 +114,7 @@ type ServerOption struct {
 	GRPCUnknownServiceHandler func(ctx context.Context, method string, stream streaming.Stream) error
 
 	// TTHeaderStreaming
-	TTHeaderStreamingOptions TTHeaderStreamingOptions
+	TTHeaderStreamingOptions ServerTTHeaderStreamingOptions
 
 	Option
 
@@ -127,13 +127,9 @@ type ServerOption struct {
 type ClientOption struct {
 	SvcInfo *serviceinfo.ServiceInfo
 
-	CliHandlerFactory ClientTransHandlerFactory
-
 	Codec Codec
 
 	PayloadCodec PayloadCodec
-
-	ConnPool ConnPool
 
 	Dialer Dialer
 
@@ -141,20 +137,37 @@ type ClientOption struct {
 
 	EnableConnPoolReporter bool
 
-	// for grpc streaming, only used for streaming call
-	GRPCStreamingCliHandlerFactory ClientTransHandlerFactory
-	GRPCStreamingConnPool          ConnPool
+	// for unary protocol, such as ttheader, framed
+	CliHandlerFactory ClientTransHandlerFactory
+	ConnPool          ConnPool
+
+	// for grpc protocol
+	GRPCHandlerFactory ClientStreamTransHandlerFactory
+	GRPCConnPoolSize   uint32
+	GRPCConnectOpts    *grpc.ConnectOptions
 
 	// for ttheader streaming, only used for streaming call
-	TTHeaderStreamingCliHandlerFactory ClientStreamFactory
+	TTHeaderStreamingCliHandlerFactory ClientStreamTransHandlerFactory
+	TTHeaderStreamingOptions           ClientTTHeaderStreamingOptions
 }
 
-type TTHeaderStreamingOption struct {
-	F func(o *TTHeaderStreamingOptions, di *utils.Slice)
+type ServerTTHeaderStreamingOption struct {
+	F func(o *ServerTTHeaderStreamingOptions, di *utils.Slice)
 }
 
-type TTHeaderStreamingOptions struct {
+type ServerTTHeaderStreamingOptions struct {
 	// actually is []ttstream.ServerHandlerOption,
+	// but we can't import ttstream here because of circular dependency,
+	// so we have to use interface{} here.
+	TransportOptions []interface{}
+}
+
+type ClientTTHeaderStreamingOption struct {
+	F func(o *ClientTTHeaderStreamingOptions, di *utils.Slice)
+}
+
+type ClientTTHeaderStreamingOptions struct {
+	// actually is []ttstream.ClientProviderOption,
 	// but we can't import ttstream here because of circular dependency,
 	// so we have to use interface{} here.
 	TransportOptions []interface{}

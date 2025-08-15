@@ -43,22 +43,14 @@ var clientPool = &sync.Pool{
 }
 
 type client struct {
-	transHdlr   remote.TransHandler
+	transHdlr   remote.ClientTransHandler
 	connManager *ConnWrapper
 	conn        net.Conn
 }
 
 // NewClient creates a new Client using the given params.
-func NewClient(ctx context.Context, ri rpcinfo.RPCInfo, handler remote.TransHandler, opt *remote.ClientOption) (Client, error) {
+func NewClient(ctx context.Context, ri rpcinfo.RPCInfo, handler remote.ClientTransHandler, opt *remote.ClientOption) (Client, error) {
 	cm := NewConnWrapper(opt.ConnPool)
-	var err error
-	// used by streaming unary
-	for _, shdlr := range opt.StreamingMetaHandlers {
-		ctx, err = shdlr.OnConnectStream(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
 	rawConn, err := cm.GetConn(ctx, opt.Dialer, ri)
 	if err != nil {
 		if errors.Is(err, kerrors.ErrGetConnection) {
@@ -78,7 +70,7 @@ func (c *client) Recycle() {
 	clientPool.Put(c)
 }
 
-func (c *client) init(handler remote.TransHandler, cm *ConnWrapper, conn net.Conn) {
+func (c *client) init(handler remote.ClientTransHandler, cm *ConnWrapper, conn net.Conn) {
 	c.transHdlr = handler
 	c.connManager = cm
 	c.conn = conn

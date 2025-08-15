@@ -43,7 +43,6 @@ import (
 	"github.com/cloudwego/kitex/pkg/remote/codec/thrift"
 	"github.com/cloudwego/kitex/pkg/remote/connpool"
 	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2"
-	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/grpc"
 	"github.com/cloudwego/kitex/pkg/remote/trans/ttstream"
 	"github.com/cloudwego/kitex/pkg/retry"
 	"github.com/cloudwego/kitex/pkg/rpcinfo"
@@ -187,13 +186,6 @@ type Options struct {
 	CloseCallbacks []func() error
 	WarmUpOption   *warmup.ClientOption
 
-	// GRPC
-	GRPCConnPoolSize uint32
-	GRPCConnectOpts  *grpc.ConnectOptions
-
-	// TTHeaderStreaming
-	TTHeaderStreamingOptions TTHeaderStreamingOptions
-
 	// XDS
 	XDSEnabled          bool
 	XDSRouterMiddleware endpoint.Middleware
@@ -241,8 +233,6 @@ func NewOptions(opts []Option) *Options {
 		Events: event.NewQueue(event.MaxEventNum),
 
 		TracerCtl: &rpcinfo.TraceController{},
-
-		GRPCConnectOpts: new(grpc.ConnectOptions),
 	}
 	o.UnaryOptions.opts = o
 	o.Apply(opts)
@@ -267,30 +257,20 @@ func (o *Options) initRemoteOpt() {
 	var zero connpool2.IdleConfig
 
 	// configure grpc
-	if o.Configs.TransportProtocol()&transport.GRPC == transport.GRPC {
+	if o.Configs.TransportProtocol()&(transport.GRPC|transport.GRPCStreaming) != 0 {
 		if o.PoolCfg != nil && *o.PoolCfg == zero {
 			// grpc unary short connection
-			o.GRPCConnectOpts.ShortConn = true
+			o.RemoteOpt.GRPCConnectOpts.ShortConn = true
 		}
-		o.RemoteOpt.ConnPool = nphttp2.NewConnPool(o.Svr.ServiceName, o.GRPCConnPoolSize, *o.GRPCConnectOpts)
-		o.RemoteOpt.CliHandlerFactory = nphttp2.NewCliTransHandlerFactory()
-	}
-	// configure grpc streaming
-	if o.Configs.TransportProtocol()&(transport.GRPC|transport.GRPCStreaming) == transport.GRPCStreaming {
-		if o.PoolCfg != nil && *o.PoolCfg == zero {
-			// grpc unary short connection
-			o.GRPCConnectOpts.ShortConn = true
-		}
-		o.RemoteOpt.GRPCStreamingConnPool = nphttp2.NewConnPool(o.Svr.ServiceName, o.GRPCConnPoolSize, *o.GRPCConnectOpts)
-		o.RemoteOpt.GRPCStreamingCliHandlerFactory = nphttp2.NewCliTransHandlerFactory()
+		o.RemoteOpt.GRPCHandlerFactory = nphttp2.NewCliTransHandlerFactory(o.Svr.ServiceName)
 	}
 	// configure ttheader streaming
 	if o.Configs.TransportProtocol()&transport.TTHeaderStreaming == transport.TTHeaderStreaming {
 		if o.PoolCfg != nil && *o.PoolCfg == zero {
 			// configure short conn pool
-			o.TTHeaderStreamingOptions.TransportOptions = append(o.TTHeaderStreamingOptions.TransportOptions, ttstream.WithClientShortConnPool())
+			o.RemoteOpt.TTHeaderStreamingOptions.TransportOptions = append(o.RemoteOpt.TTHeaderStreamingOptions.TransportOptions, ttstream.WithClientShortConnPool())
 		}
-		o.RemoteOpt.TTHeaderStreamingCliHandlerFactory = ttstream.NewCliTransHandlerFactory(o.TTHeaderStreamingOptions.TransportOptions...)
+		o.RemoteOpt.TTHeaderStreamingCliHandlerFactory = ttstream.NewCliTransHandlerFactory()
 	}
 	if o.RemoteOpt.ConnPool == nil {
 		if o.PoolCfg != nil {
