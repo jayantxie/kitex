@@ -20,12 +20,13 @@ package genericclient
 import (
 	"context"
 	"runtime"
-	"sync"
 
 	"github.com/cloudwego/kitex/client"
 	"github.com/cloudwego/kitex/client/callopt"
 	"github.com/cloudwego/kitex/client/callopt/streamcall"
+	igeneric "github.com/cloudwego/kitex/internal/generic"
 	"github.com/cloudwego/kitex/pkg/generic"
+	"github.com/cloudwego/kitex/pkg/rpcinfo"
 	"github.com/cloudwego/kitex/pkg/serviceinfo"
 	"github.com/cloudwego/kitex/pkg/streaming"
 	"github.com/cloudwego/kitex/transport"
@@ -51,50 +52,19 @@ func NewClientWithServiceInfo(destService string, g generic.Generic, svcInfo *se
 	if err != nil {
 		return nil, err
 	}
-	var mp *sync.Map
-	if !generic.HasIDLInfo(g) {
-		mp = &sync.Map{}
-	}
 	cli := &genericServiceClient{
 		svcInfo: svcInfo,
 		kClient: kc,
 		sClient: kc.(client.Streaming),
 		g:       g,
-		modeMap: mp,
 	}
+	// binary generic need method info context
+	cli.isBinaryGeneric, _ = g.GetExtra(generic.IsBinaryGeneric).(bool)
+	// http generic get method name by request
+	cli.getMethodFunc, _ = g.GetExtra(generic.GetMethodNameByRequestFuncKey).(generic.GetMethodNameByRequestFunc)
+
 	runtime.SetFinalizer(cli, (*genericServiceClient).Close)
-
-	svcInfo.GenericMethod = func(name string) serviceinfo.MethodInfo {
-		key := serviceinfo.GenericMethod
-		if mp != nil {
-			if mode, ok := mp.Load(name); ok {
-				key = getGenericStreamingMethodInfoKey(mode.(serviceinfo.StreamingMode))
-			}
-			return svcInfo.Methods[key]
-		}
-		n, err := g.GetMethod(nil, name)
-		if err != nil {
-			return svcInfo.Methods[key]
-		}
-		key = getGenericStreamingMethodInfoKey(n.StreamingMode)
-		m := svcInfo.Methods[key]
-		return &methodInfo{
-			MethodInfo: m,
-			oneway:     n.Oneway,
-		}
-	}
-
 	return cli, nil
-}
-
-// methodInfo is a wrapper to update the oneway flag of a service.MethodInfo.
-type methodInfo struct {
-	serviceinfo.MethodInfo
-	oneway bool
-}
-
-func (m *methodInfo) OneWay() bool {
-	return m.oneway
 }
 
 // Client generic client
@@ -112,33 +82,39 @@ type Client interface {
 }
 
 type genericServiceClient struct {
-	svcInfo *serviceinfo.ServiceInfo
-	kClient client.Client
-	sClient client.Streaming
-	g       generic.Generic
-	// modeMap stores the streaming mode of methods for binary generic
-	// because the streaming mode of a method is not stored in binary generic which doesn't have IDL info
-	// but we can know it when creating different streaming clients
-	modeMap *sync.Map // map[string]serviceinfo.StreamingMode
+	svcInfo         *serviceinfo.ServiceInfo
+	kClient         client.Client
+	sClient         client.Streaming
+	g               generic.Generic
+	isBinaryGeneric bool
+	getMethodFunc   generic.GetMethodNameByRequestFunc
 }
 
 func (gc *genericServiceClient) GenericCall(ctx context.Context, method string, request interface{}, callOptions ...callopt.Option) (response interface{}, err error) {
 	ctx = client.NewCtxWithCallOptions(ctx, callOptions)
-	mtInfo := gc.svcInfo.MethodInfo(method)
-	_args := mtInfo.NewArgs().(*generic.Args)
-	_args.Method = method
-	_args.Request = request
-
-	mt, err := gc.g.GetMethod(request, method)
-	if err != nil {
-		return nil, err
+	if gc.isBinaryGeneric {
+		// To be compatible with binary generic calls, streaming mode must be passed in.
+		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingNone)
 	}
-	if mt.Oneway {
-		return nil, gc.kClient.Call(ctx, mt.Name, _args, nil)
+	if gc.getMethodFunc != nil {
+		// get method name from http generic by request
+		method, _ = gc.getMethodFunc(request)
+	}
+	var _args *generic.Args
+	var _result *generic.Result
+	mtInfo := gc.svcInfo.MethodInfo(ctx, method)
+	if mtInfo != nil {
+		_args = mtInfo.NewArgs().(*generic.Args)
+		_args.Method = method
+		_args.Request = request
+		_result = mtInfo.NewResult().(*generic.Result)
+	} else {
+		// To correctly report the unknown method error, an empty object is returned here.
+		_args = &generic.Args{}
+		_result = &generic.Result{}
 	}
 
-	_result := mtInfo.NewResult().(*generic.Result)
-	if err = gc.kClient.Call(ctx, mt.Name, _args, _result); err != nil {
+	if err = gc.kClient.Call(ctx, method, _args, _result); err != nil {
 		return
 	}
 	return _result.GetSuccess(), nil
@@ -154,34 +130,38 @@ func (gc *genericServiceClient) Close() error {
 
 func (gc *genericServiceClient) ClientStreaming(ctx context.Context, method string, callOptions ...streamcall.Option) (ClientStreamingClient, error) {
 	ctx = client.NewCtxWithCallOptions(ctx, streamcall.GetCallOptions(callOptions))
-	if gc.modeMap != nil {
-		gc.modeMap.LoadOrStore(method, serviceinfo.StreamingClient)
+	if gc.isBinaryGeneric {
+		// To be compatible with binary generic calls, streaming mode must be passed in.
+		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingClient)
 	}
 	st, err := gc.sClient.StreamX(ctx, method)
 	if err != nil {
 		return nil, err
 	}
-	return newClientStreamingClient(gc.svcInfo.MethodInfo(method), method, st), nil
+	ri := rpcinfo.GetRPCInfo(st.Context())
+	return newClientStreamingClient(ri.Invocation().MethodInfo(), method, st), nil
 }
 
 func (gc *genericServiceClient) ServerStreaming(ctx context.Context, method string, req interface{}, callOptions ...streamcall.Option) (ServerStreamingClient, error) {
 	ctx = client.NewCtxWithCallOptions(ctx, streamcall.GetCallOptions(callOptions))
-	if gc.modeMap != nil {
-		gc.modeMap.LoadOrStore(method, serviceinfo.StreamingServer)
+	if gc.isBinaryGeneric {
+		// To be compatible with binary generic calls, streaming mode must be passed in.
+		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingServer)
 	}
 	st, err := gc.sClient.StreamX(ctx, method)
 	if err != nil {
 		return nil, err
 	}
-	stream := newServerStreamingClient(gc.svcInfo.MethodInfo(method), method, st).(*serverStreamingClient)
+	ri := rpcinfo.GetRPCInfo(st.Context())
+	stream := newServerStreamingClient(ri.Invocation().MethodInfo(), method, st).(*serverStreamingClient)
 
 	args := stream.methodInfo.NewArgs().(*generic.Args)
 	args.Method = stream.method
 	args.Request = req
-	if err := st.SendMsg(ctx, args); err != nil {
+	if err := st.SendMsg(st.Context(), args); err != nil {
 		return nil, err
 	}
-	if err := stream.CloseSend(ctx); err != nil {
+	if err := stream.CloseSend(st.Context()); err != nil {
 		return nil, err
 	}
 	return stream, nil
@@ -189,14 +169,16 @@ func (gc *genericServiceClient) ServerStreaming(ctx context.Context, method stri
 
 func (gc *genericServiceClient) BidirectionalStreaming(ctx context.Context, method string, callOptions ...streamcall.Option) (BidiStreamingClient, error) {
 	ctx = client.NewCtxWithCallOptions(ctx, streamcall.GetCallOptions(callOptions))
-	if gc.modeMap != nil {
-		gc.modeMap.LoadOrStore(method, serviceinfo.StreamingBidirectional)
+	if gc.isBinaryGeneric {
+		// To be compatible with binary generic calls, streaming mode must be passed in.
+		ctx = igeneric.WithGenericStreamingMode(ctx, serviceinfo.StreamingBidirectional)
 	}
 	st, err := gc.sClient.StreamX(ctx, method)
 	if err != nil {
 		return nil, err
 	}
-	return newBidiStreamingClient(gc.svcInfo.MethodInfo(method), method, st), nil
+	ri := rpcinfo.GetRPCInfo(st.Context())
+	return newBidiStreamingClient(ri.Invocation().MethodInfo(), method, st), nil
 }
 
 // ClientStreamingClient define client side generic client streaming APIs

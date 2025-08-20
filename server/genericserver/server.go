@@ -41,3 +41,22 @@ func NewServerWithServiceInfo(handler generic.Service, g generic.Generic, svcInf
 	}
 	return svr
 }
+
+// NewServerV2 creates a generic server with the given handler and options.
+func NewServerV2(handler *generic.ServiceV2, g generic.Generic, opts ...server.Option) server.Server {
+	svcInfo := generic.ServiceInfoWithGeneric(g)
+	return NewServerWithServiceInfoV2(handler, g, svcInfo, opts...)
+}
+
+// NewServerWithServiceInfoV2 creates a generic server with the given handler, serviceInfo and options.
+func NewServerWithServiceInfoV2(handler *generic.ServiceV2, g generic.Generic, svcInfo *serviceinfo.ServiceInfo, opts ...server.Option) server.Server {
+	var options []server.Option
+	options = append(options, server.WithGeneric(g))
+	options = append(options, opts...)
+
+	svr := server.NewServer(options...)
+	if err := svr.RegisterService(svcInfo, handler); err != nil {
+		panic(err)
+	}
+	return svr
+}
